@@ -202,6 +202,12 @@ function onShowWindow()
     c_ord.btnPrevPage.active = false
     c_ord.btnNextPage.active = false
 
+    local ships = getPlayerCaptainedCrafts()
+    for _, ship in pairs(ships) do 
+
+
+    end
+
 end
 
 
@@ -351,7 +357,7 @@ function buildGroupsUI(parent)
     split_sp.topSize = 20
 
     parent:createLabel(vec2(split_sp.top.lower.x, split_sp.top.lower.y + 6), "Unassigend ships with captains:", 12)
-    local listBox = parent:createListBox(split_sp.bottom)
+    c_grp.lstPool = parent:createListBox(split_sp.bottom)
 
     parent:createLine(vec2(split1.left.upper.x + 15, split1.left.lower.y), vec2(split1.left.upper.x + 15, split1.left.upper.y))
 
@@ -385,29 +391,34 @@ function buildGroupsUI(parent)
 
         -- group labels
 
-        parent:createLabel(vec2(split_grp2.left.lower.x, split_grp2.left.lower.y + 6), string.format("Group %i", j), 16)
+        c_grp.groups.lblName[j] = parent:createLabel(vec2(split_grp2.left.lower.x, split_grp2.left.lower.y + 6), string.format("Group %i", j), 16)
 
         local split_grp3 = UIVerticalSplitter(split_grp2.right, 10, 0, 0.4)
 
         -- group controls
 
-        local showhud = parent:createCheckBox(Rect(vec2(split_grp3.left.lower.x, split_grp3.left.lower.y + 5), split_grp3.left.upper), "HUD", "onGroupHudChecked")
-        local rengroup = parent:createButton(split_grp3.right, "Rename", "onRenameGroupPressed")
+        c_grp.groups.chkHud[j] = parent:createCheckBox(Rect(vec2(split_grp3.left.lower.x, split_grp3.left.lower.y + 5), split_grp3.left.upper), "HUD", "onGroupHudChecked")
+        c_grp.groups.btnRename[j] = parent:createButton(split_grp3.right, "Rename", "onRenameGroupPressed")
         
         local split_grp4 = UIVerticalSplitter(split_grp1.bottom, 10, 0, 0.5)
         split_grp4.rightSize = 30
 
         -- group ship list
-        local list_grp = parent:createListBox(split_grp4.left)
+        c_grp.groups.lstShips[j] = parent:createListBox(split_grp4.left)
 
         local x, y = split_grp4.right.lower.x, split_grp4.right.lower.y
         local r_size = split_grp4.right.size
 
-        local shipassign   = parent:createButton(Rect(x, y + (r_size.y / 2) - 35, x + 30, y + (r_size.y / 2) - 5), "+", "onAssignShipGroupPressed")   
+        local shipassign = parent:createButton(Rect(x, y + (r_size.y / 2) - 35, x + 30, y + (r_size.y / 2) - 5), "+", "onAssignShipGroupPressed")   
         local shipunassign = parent:createButton(Rect(x, y + (r_size.y / 2) + 5, x + 30, y + (r_size.y / 2) + 35), "-", "onUnassignShipGroupPressed")     
 
         shipassign.textSize = 18  
         shipunassign.textSize = 18  
+        shipassign.active = false
+        shipunassign.active = false
+
+        c_grp.groups.btnAssign[j] = shipassign
+        c_grp.groups.btnUnassign[j] = shipunassign
         
     end  
 

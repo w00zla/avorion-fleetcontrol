@@ -92,3 +92,30 @@ function printsf(message, ...)
 	print(message)
 	
 end
+
+
+local function checkCaptain(entity)
+
+    local captains = entity:getCrewMembers(CrewProfessionType.Captain)
+    if captains and captains > 0 then
+        return true
+    end
+
+end
+
+
+function getPlayerCaptainedCrafts()
+
+	local ships = {}
+
+	local playerentities = {Sector():getEntitiesByFaction(Player().index)}
+	for _, e in pairs(playerentities) do
+		if e.isShip and e.hasScript("data/scripts/entity/craftorders.lua") and checkCaptain(e) then
+			table.insert(ships, e)
+		end
+	end
+
+	return ships
+
+end
+
