@@ -13,7 +13,7 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 require "utility"
 require "stringutility"
 
-Config = require("findstation.config")
+Config = require("fleetcontrol.config")
 
 -- globals
 fc_controlui = "fleetcontrol/controlui.lua"
@@ -75,7 +75,7 @@ end
 
 function debugLog(msg, ...)
 
-	if Config.debugoutput() and msg and msg ~= "" then
+	if Config.debugoutput("player") and msg and msg ~= "" then
 		local pinfo = ""
 		local player = Player()
 		if player then pinfo = " p#" .. tostring(player.index) end
@@ -107,11 +107,12 @@ end
 function getPlayerCaptainedCrafts()
 
 	local ships = {}
+	local player = Player()
 
-	local playerentities = {Sector():getEntitiesByFaction(Player().index)}
+	local playerentities = {Sector():getEntitiesByFaction(player.index)}
 	for _, e in pairs(playerentities) do
-		if e.isShip and e.hasScript("data/scripts/entity/craftorders.lua") and checkCaptain(e) then
-			table.insert(ships, e)
+		if e.index ~= player.craftIndex and e.isShip and checkCaptain(e) then
+			table.insert(ships, { name=e.name, index=e.index })
 		end
 	end
 
@@ -119,3 +120,70 @@ function getPlayerCaptainedCrafts()
 
 end
 
+
+function getAIStateString(state)
+
+	local aistate = "-"
+
+	if state == AIState.None then
+		aistate = "None"
+	elseif state == AIState.Idle then
+		aistate = "Idle"
+	elseif state == AIState.Patrol then
+		aistate = "Patrol"
+	elseif state == AIState.Escort then
+		aistate = "Escort"
+	elseif state == AIState.Aggressive then
+		aistate = "Aggressive"
+	elseif state == AIState.Passive then
+		aistate = "Passive"
+	elseif state == AIState.Guard then
+		aistate = "Guard"
+	elseif state == AIState.Jump then
+		aistate = "Jump"
+	elseif state == AIState.Fly then
+		aistate = "Fly"
+	elseif state == AIState.Attack then
+		aistate = "Attack"
+	elseif state == AIState.Follow then
+		aistate = "Follow"
+	end
+
+	return aistate
+
+end
+
+
+function getShipAIOrderState(entity)
+
+    local aistate, order
+
+    local ai = ShipAI(entity.index)
+    if ai then
+        aistate = getAIStateString(ai.state)
+        
+		-- get current ship order by looking at the AI state and attached scripts like "ai/mine.lua"
+		if ai.state == AIState.Idle or 
+		   ai.state == AIState.Passive or 
+		   ai.state == AIState.Guard or 
+		   ai.state == AIState.Escort then
+			order = aistate
+		elseif ai.state == AIState.Aggressive then
+			order = "Attack"
+		else
+			-- get special orders
+			if entity:hasScript("data/scripts/entity/craftorders.lua") then
+				if entity:hasScript("ai/patrol.lua") then
+					order = "Patrol"
+				elseif entity:hasScript("ai/mine.lua") then
+					order = "Mine"
+				elseif entity:hasScript("ai/salvage.lua") then
+					order = "Salvage"
+				end
+			end
+		end
+    end
+
+    return aistate, order
+
+end

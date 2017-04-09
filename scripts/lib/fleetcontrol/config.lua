@@ -16,29 +16,53 @@ local defaults = {
 	debugoutput = false
 }
 
-
 local configprefix = "fleetcontrol_"
-local debugoutput = nil
+
 local Config = {}
+local debugoutput = {
+	server = nil,
+	sector = nil,
+	player = nil,
+	entity = nil
+}
 
 
-function Config.saveValue(config, val)
+function Config.saveValue(scope, config, val)
 
 	local storagekey = configprefix .. config
-	Server():setValue(storagekey, val)
 
+	local target = getTargetByScope(scope)
+	target:setValue(storagekey, val)
+	
 end
 
 
-function Config.loadValue(config)
+function Config.loadValue(scope, config)
 
 	local storagekey = configprefix .. config
-	local val = Server():getValue(storagekey)
+
+	local target = getTargetByScope(scope)
+	local val = target:getValue(storagekey)
 	
 	if not val and defaults[config] then
 		val = defaults[config]
 	end
 	return val
+
+end
+
+
+function getTargetByScope(scope)
+
+	if scope == "entity" then
+		return Entity()
+	elseif scope == "player" then
+		return Player()
+	elseif scope == "sector" then
+		return Sector()
+	elseif scope == "server" then
+		return Server()
+	end
 
 end
 
@@ -53,12 +77,12 @@ function Config.getCurrent()
 end
 
 
-function Config.debugoutput()
+function Config.debugoutput(scope)
 
-	if debugoutput == nil then
-		debugoutput = Config.loadValue("debugoutput")
+	if debugoutput[scope] == nil then
+		debugoutput[scope] = Config.loadValue(scope, "debugoutput")
 	end	
-	return debugoutput
+	return debugoutput[scope]
 
 end
 
