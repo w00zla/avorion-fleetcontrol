@@ -13,30 +13,45 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 require "utility"
 require "stringutility"
 
---Config = require("fleetcontrol.config")
 CachedConfig = require("fleetcontrol.cachedconfig")
 
--- config defaults
-local configdefaults = {
-    debugoutput = false
-}
-local configprefix = "fleetcontrol_"
-local myconfig = CachedConfig(configprefix, configdefaults, "player")
-
+-- MODINFO
 local modInfo = {  
     name = "fleetcontrol",
     version = "0.1",
     author = "w00zla"
 }
 
+-- config
+local configdefaults = {
+    updatedelay = 750,
+    debugoutput = false
+}
+local configprefix = "fleetcontrol_"
+local myconfig = CachedConfig(configprefix, configdefaults, "player")
+
 -- globals
 fc_controlui = "fleetcontrol/controlui.lua"
 
+-- useful stuff
+local ordersInfo = {
+    { order="Idle", text="Idle"},
+    { order="Passive", text="Passive"},
+    { order="Guard", text="Guard Position"},
+    { order="Patrol", text="Patrol Sector"},
+    { order="Escort", text="Escort Me"},
+    { order="Attack", text="Attack Enemies"},
+    { order="Mine", text="Mine"},
+    { order="Salvage", text="Salvage"}
+}
+
 
 function getConfig()
-
     return myconfig
+end
 
+function getOrdersInfo()
+    return ordersInfo
 end
 
 
