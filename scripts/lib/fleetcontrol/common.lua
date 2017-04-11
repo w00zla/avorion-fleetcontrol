@@ -40,7 +40,7 @@ local ordersInfo = {
     { order="Passive", text="Passive", script=av_script_craftorders, func="onPassiveButtonPressed"},
     { order="Guard", text="Guard Position", script=av_script_craftorders, func="onGuardButtonPressed"},
     { order="Patrol", text="Patrol Sector", script=av_script_craftorders, func="onPatrolButtonPressed"},
-    { order="Escort", text="Escort Me", script=av_script_craftorders, func="onEscortMeButtonPressed"},
+    { order="Escort", text="Escort Me", script=av_script_craftorders, func="onEscortMeButtonPressed", param="playercraftindex"},
     { order="Attack", text="Attack Enemies", script=av_script_craftorders, func="onAttackEnemiesButtonPressed"},
     { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed"},
     { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed"}

@@ -37,7 +37,8 @@ local c_ord = {
         lblState = {},
         lblLoc = {},
         btnLook = {},
-        cmdOrder = {}
+        cmdOrder = {},
+        lblOrder = {}
     }
 }
 
@@ -280,6 +281,8 @@ function buildOrdersUI(parent)
             cbox:addEntry(btninfo.text)
         end
 
+        local orderLabel = parent:createLabel(vec2(split2.right.lower.x, split2.right.lower.y + 6), "", 15)
+
         -- hide controls initially and add to reference table
         frame:hide()
         nameLabel:hide()
@@ -287,6 +290,7 @@ function buildOrdersUI(parent)
         locLabel:hide()
         lookat:hide()
         cbox:hide()
+        orderLabel:hide()
 
         table.insert(c_ord.ships.frame, frame)
         table.insert(c_ord.ships.lblName, nameLabel)
@@ -294,6 +298,7 @@ function buildOrdersUI(parent)
         table.insert(c_ord.ships.lblLoc, locLabel)
         table.insert(c_ord.ships.btnLook, lookat)
         table.insert(c_ord.ships.cmdOrder, cbox)
+        table.insert(c_ord.ships.lblOrder, orderLabel)
             
         y_shp = y_shp + 35	   
     end
@@ -517,6 +522,8 @@ end
 
 function onGroupOrderSelected(sender)
 
+    if c_ord.cmdGroupOrder.selectedIndex < 1 then return end
+
     if ordersbusy then return end
     ordersbusy = true
 
@@ -536,6 +543,8 @@ function onShipOrderSelected(sender)
 
     for i, cmd in pairs(c_ord.ships.cmdOrder) do
 		if cmd.index == sender.index then
+            if cmd.selectedIndex < 1 then return end
+
 			local indices = {shipinfos[currentShipGroup][i].index}	
             invokeOrdersScript(indices, ordersInfo[cmd.selectedIndex])
             break
@@ -590,14 +599,27 @@ function displayShipState(idx, ship, currloc)
     -- TODO: disable combobox if ship is elsewhere
 
     -- set selected order to ship's current order
-    c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)
     if ship.order then
-        for i, oi in pairs(ordersInfo) do 
-            if oi.order == ship.order then
-                c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(i)
-                break
+        if ship.elsewhere then
+            for i, oi in pairs(ordersInfo) do 
+                if oi.order == ship.order then
+                    c_ord.ships.lblOrder[idx].caption = oi.text
+                    break
+                end
             end
+            c_ord.ships.cmdOrder[idx]:hide()
+            c_ord.ships.lblOrder[idx]:show()
+        else
+            c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)
+            for i, oi in pairs(ordersInfo) do 
+                if oi.order == ship.order then
+                    c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(i)
+                    break
+                end
+            end
+            c_ord.ships.cmdOrder[idx]:show()
         end
+        
     end
 
     -- ensure all ship widgets are visible
@@ -606,7 +628,6 @@ function displayShipState(idx, ship, currloc)
     if not c_ord.ships.lblState[idx].visible then c_ord.ships.lblState[idx]:show() end
     if not c_ord.ships.lblLoc[idx].visible then c_ord.ships.lblLoc[idx]:show() end
     if not c_ord.ships.btnLook[idx].visible then c_ord.ships.btnLook[idx]:show() end
-    if not c_ord.ships.cmdOrder[idx].visible then c_ord.ships.cmdOrder[idx]:show() end
 
 end
 
@@ -621,6 +642,7 @@ function refreshShipsUI()
         c_ord.ships.lblLoc[s]:hide()
         c_ord.ships.btnLook[s]:hide()
         c_ord.ships.cmdOrder[s]:hide()
+        c_ord.ships.lblOrder[s]:hide()
     end
 
     if not shipinfos then return end
@@ -845,8 +867,17 @@ function invokeOrdersScript(shipindices, orderinfo)
                 debugLog("invokeOrdersScript() --> ship: %s (%s) is missing script '%s'!", idx, orderinfo.script)
                 return
             end
-            debugLog("invokeOrdersScript() --> ship: %s (%s) | order: %s | script: %s | func: %s", ship.name, ship.index, orderinfo.order, orderinfo.script, orderinfo.func)
-            ship:invokeFunction(orderinfo.script, orderinfo.func, idx) 
+            debugLog("invokeOrdersScript() --> ship: %s (%s) | order: %s | script: %s | func: %s | param: %s", ship.name, ship.index, orderinfo.order, orderinfo.script, orderinfo.func, orderinfo.param)
+            
+            if orderinfo.param then
+                if orderinfo.param == "playercraftindex" then
+                    ship:invokeFunction(orderinfo.script, orderinfo.func, Player(callingPlayer).craftIndex) 
+                else
+                    debugLog("invokeOrdersScript() --> unknown order function parameter!", idx)
+                end
+            else
+                ship:invokeFunction(orderinfo.script, orderinfo.func) 
+            end
         else
             debugLog("invokeOrdersScript() --> no ship/entity with index %s found!", idx)
         end
