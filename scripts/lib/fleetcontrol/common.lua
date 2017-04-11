@@ -31,18 +31,19 @@ local configprefix = "fleetcontrol_"
 local myconfig = CachedConfig(configprefix, configdefaults, "player")
 
 -- globals
-fc_controlui = "fleetcontrol/controlui.lua"
+av_script_craftorders = "data/scripts/entity/craftorders.lua"
+fc_script_controlui = "fleetcontrol/controlui.lua"
 
 -- useful stuff
 local ordersInfo = {
-    { order="Idle", text="Idle"},
-    { order="Passive", text="Passive"},
-    { order="Guard", text="Guard Position"},
-    { order="Patrol", text="Patrol Sector"},
-    { order="Escort", text="Escort Me"},
-    { order="Attack", text="Attack Enemies"},
-    { order="Mine", text="Mine"},
-    { order="Salvage", text="Salvage"}
+    { order="Idle", text="Idle", script=av_script_craftorders, func="onIdleButtonPressed"},
+    { order="Passive", text="Passive", script=av_script_craftorders, func="onPassiveButtonPressed"},
+    { order="Guard", text="Guard Position", script=av_script_craftorders, func="onGuardButtonPressed"},
+    { order="Patrol", text="Patrol Sector", script=av_script_craftorders, func="onPatrolButtonPressed"},
+    { order="Escort", text="Escort Me", script=av_script_craftorders, func="onEscortMeButtonPressed"},
+    { order="Attack", text="Attack Enemies", script=av_script_craftorders, func="onAttackEnemiesButtonPressed"},
+    { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed"},
+    { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed"}
 }
 
 
@@ -106,8 +107,10 @@ function debugLog(msg, ...)
 
     if myconfig.debugoutput and msg and msg ~= "" then
         local pinfo = ""
-        local player = Player()
-        if player then pinfo = " p#" .. tostring(player.index) end
+        if onServer() then
+            local player = Player()
+            if player then pinfo = " p#" .. tostring(player.index) end
+        end
         local prefix = string.format("SCRIPT %s [v%s]%s DEBUG => ", modInfo.name, modInfo.version, pinfo)
         printsf(prefix .. msg, ...)
     end
@@ -120,6 +123,16 @@ function printsf(message, ...)
     message = string.format(message, ...)
     print(message)
     
+end
+
+
+function tablecontains(table, value)
+
+    for _, v in pairs(table) do
+        if v == value then return true end
+    end
+    return false
+
 end
 
 
@@ -201,14 +214,12 @@ function getShipAIOrderState(entity)
             order = "Attack"
         else
             -- get special orders
-            if entity:hasScript("data/scripts/entity/craftorders.lua") then
-                if entity:hasScript("ai/patrol.lua") then
-                    order = "Patrol"
-                elseif entity:hasScript("ai/mine.lua") then
-                    order = "Mine"
-                elseif entity:hasScript("ai/salvage.lua") then
-                    order = "Salvage"
-                end
+            if entity:hasScript("ai/patrol.lua") then
+                order = "Patrol"
+            elseif entity:hasScript("ai/mine.lua") then
+                order = "Mine"
+            elseif entity:hasScript("ai/salvage.lua") then
+                order = "Salvage"
             end
         end
     end

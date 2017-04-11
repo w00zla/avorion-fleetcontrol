@@ -25,7 +25,7 @@ function initialize()
     -- subscribe to event callbacks
     Player():registerCallback("onShipChanged", "onShipChanged")	
     
-    addShipScript(fc_controlui) 
+    addShipScript(fc_script_controlui) 
     
 end
 
@@ -57,8 +57,8 @@ end
 function onShipChanged(playerIndex, craftIndex)
 
     -- remove and add script to ship entities
-    removeEntityScript(lastCraft, fc_controlui)	
-    addShipScript(fc_controlui)	
+    removeEntityScript(lastCraft, fc_script_controlui)	
+    addShipScript(fc_script_controlui)	
 
 end
 
@@ -81,10 +81,10 @@ function removeScripts()
 
     -- remove scripts from all ship entities
     local currentCraft = Player().craftIndex
-    removeEntityScript(currentCraft, fc_controlui)
+    removeEntityScript(currentCraft, fc_script_controlui)
     
     if lastCraft ~= currentCraft then
-        removeEntityScript(lastCraft, fc_controlui)
+        removeEntityScript(lastCraft, fc_script_controlui)
     end
 
     -- unsubscribe from event callbacks

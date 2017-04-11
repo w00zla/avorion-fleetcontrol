@@ -8,21 +8,39 @@ desc: configuration util for fleetcontrol mod (with cached values)
 
 ]]--
 
-package.path = package.path .. ";data/scripts/lib/?.lua"
-
 
 local CachedConfig = {
     _scope = "server",
     _index = nil,
-    _prefix = "",
+    _prefix = nil,
     _defaults = {}
 }
 
 
 local function new(prefix, defaults, scope, index)
 
-    -- create new "object instance"
-    return setmetatable({ _prefix=prefix, _defaults=defaults, _scope=scope, _index=index }, CachedConfig)
+    -- prefix is required
+    if not prefix or prefix == "" then
+        error("CachedConfig: prefix must not be nil or empty!")
+    end 
+  
+    local obj = {
+        _prefix = prefix
+    }
+
+    -- assign fields if defined
+    if scope then
+        obj._scope = scope
+    end
+    if defaults then
+        obj._defaults = defaults
+    end
+    if index then
+        obj._index = index
+    end
+
+    -- create and return new "object instance"
+    return setmetatable(obj, CachedConfig)
     
 end
 
@@ -119,5 +137,5 @@ CachedConfig.__newindex = function(t, k, v)
 end
 
 
--- returns table which acts as a factory for new object instances
-return setmetatable({new = new}, {__call = function(_, ...) return new(...) end})
+-- return factory function for creating new object instances
+return new

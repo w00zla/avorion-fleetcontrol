@@ -62,52 +62,69 @@ local c_conf = {
     }
 }
 
-
-local shipgroups = {
-    {
-        name="Group 1",
-        showhud=false,
-        hudcolor={a=0.5,r=1,g=1,b=1}
-    },
-    {
-        name="Group 2",
-        showhud=false,
-        hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
-    },
-    {
-        name="CustomName",
-        showhud=false,
-        hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
-    },
-    {
-        name="Group 4",
-        showhud=false,
-        hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
-    }    
-}
-
+local groupconfig
+local shipgroups
+local shipinfos
+local allships
 
 local config
 local ordersInfo
-local groupships
 
-local maxordgrpships = 12
+local groupshiplimit = 12
 local shipPoolLastIndex
 local configCatsLastIndex
-local currentShipGroup
+local currentShipGroup = 1
 
+local selectedtabidx
+local uivisible = false
 local doupdatestates = false
 local laststateupdate = 0
+local ordersbusy = false
 
 
 function initialize()
 
-    if onClient() then
-        config = getConfig()
-        ordersInfo = getOrdersInfo()
+    if onServer() then
+        return
     end
 
+    config = getConfig()
+    ordersInfo = getOrdersInfo()
+
+    -- TODO: load belows from config
+
+    groupconfig = {
+        {
+            name="Group 1",
+            showhud=false,
+            hudcolor={a=0.5,r=1,g=1,b=1}
+        },
+        {
+            name="Group 2",
+            showhud=false,
+            hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
+        },
+        {
+            name="CustomName",
+            showhud=false,
+            hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
+        },
+        {
+            name="Group 4",
+            showhud=false,
+            hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
+        }    
+    }
+ 
+    shipgroups = {
+        { "Craft 1", "Craft 2" },
+        { "Craft 3" },
+        {},
+        {}
+    }
+
 end
+
 
 function getIcon(seed, rarity)
     return "data/textures/icons/caged-ball.png"
@@ -121,7 +138,8 @@ end
 
 function onSectorChanged()
 
-    -- TODO: update ship states / indices
+    -- TODO: persist ship locations and orders
+    -- (or just use ship.scripts which callback!)
 
 end
 
@@ -130,32 +148,20 @@ function onShowWindow()
 
     tabs.window:selectTab(tabs.orders)
 
-    -- TODO: implement paging of groups
-    currentShipGroup = 1
-    c_ord.btnPrevPage.active = false
-    c_ord.btnNextPage.active = false
-
     -- show current groupnames in related widgets
     refreshGroupNames()
 
-    -- get all relevant ships of player  
-    local ships = getPlayerCaptainedCrafts()
-    
-    -- update groups tab widgets
-    refreshGroupsUI(ships)
-
-    -- TODO: implement loading of assigned ships for current group
-    groupships = ships
+    -- trigger updates of UI widgets
+    uivisible = true   
+    -- trigger update of ship states and orders
     doupdatestates = true
-
-    -- update ship states and refresh ship list widgets
-    --updateShipStates(ships)
 
 end
 
 
 function onCloseWindow()
 
+    uivisible = false
     doupdatestates = false
 
 end
@@ -176,6 +182,7 @@ function initUI()
     mywindow.moveable = 1
     
     tabs.window = mywindow:createTabbedWindow(Rect(vec2(10, 10), size - 10))
+    tabs.window.onSelectedFunction = "onTabSelected"
 
     tabs.orders = tabs.window:createTab("Orders", "data/textures/icons/back-forth.png", "Fleet Orders")
     buildOrdersUI(tabs.orders)
@@ -197,8 +204,9 @@ function buildOrdersUI(parent)
 
     -- footer
     c_ord.btnPrevPage = parent:createButton(Rect(10, size.y - 40, 60, size.y - 10), "<", "onPrevPagePressed")	
+    c_ord.btnPrevPage.active = false
     c_ord.btnNextPage = parent:createButton(Rect(size.x - 60, size.y - 40, size.x - 10, size.y - 10), ">", "onNextPagePressed")	
-   
+    
     local split_grp = UIVerticalSplitter(Rect(10, 10, size.x - 10, 40), 10, 0, 0.5)
     split_grp.rightSize = 250
 
@@ -223,7 +231,7 @@ function buildOrdersUI(parent)
     local locLabelX = -85
 
     local y_shp = 65
-    for s = 1, maxordgrpships do 
+    for s = 1, groupshiplimit do 
 
         local yText = y_shp + 16
         
@@ -304,7 +312,7 @@ function buildGroupsUI(parent)
     local split_sp = UIHorizontalSplitter(split1.left, 10, 0, 0.5)
     split_sp.topSize = 30
 
-    parent:createLabel(vec2(split_sp.top.lower.x, split_sp.top.lower.y), "Unassigend ships\nwith captains:", 12)
+    parent:createLabel(vec2(split_sp.top.lower.x, split_sp.top.lower.y), "Unassigend captained\nships in sector:", 12)
     c_grp.lstPool = parent:createListBox(split_sp.bottom)
 
     parent:createLine(vec2(split1.left.upper.x + 15, split1.left.lower.y), vec2(split1.left.upper.x + 15, split1.left.upper.y))
@@ -444,11 +452,142 @@ function buildConfigUI(parent)
 end
 
 
-function displayShipState(idx, ship)
-  
+function onTabSelected()
+
+    selectedtabidx = tabs.window:getActiveTab().index
+
+    if tabs.groups and tabs.groups.index == selectedtabidx then
+        -- update groups tab widgets
+        refreshGroupsUI()
+    end
+
+end
+
+
+function onPrevPagePressed()
+    
+    currentShipGroup = currentShipGroup - 1
+    laststateupdate = 0
+
+    c_ord.lblGroupName.caption = groupconfig[currentShipGroup].name
+
+    if currentShipGroup == 1 then
+        c_ord.btnPrevPage.active = false
+    end
+    c_ord.btnNextPage.active = true
+
+end
+
+
+function onNextPagePressed()
+
+    currentShipGroup = currentShipGroup + 1
+    laststateupdate = 0
+
+    c_ord.lblGroupName.caption = groupconfig[currentShipGroup].name
+
+    if currentShipGroup == 4 then
+        c_ord.btnNextPage.active = false
+    end
+    c_ord.btnPrevPage.active = true
+
+end
+
+
+function onLookAtPressed(sender)
+
+    for i, btn in pairs(c_ord.ships.btnLook) do
+		if btn.index == sender.index then
+            if shipinfos[currentShipGroup][i].index then
+                local entity = Entity(shipinfos[currentShipGroup][i].index)
+			    if entity then
+				    Player().selectedObject = entity
+                end
+			elseif shipinfos[currentShipGroup][i].location then
+                local coords = shipinfos[currentShipGroup][i].location
+				GalaxyMap():setSelectedCoordinates(coords.x, coords.y)
+				GalaxyMap():show(coords.x, coords.y)
+			end
+			
+		end
+	end
+
+end
+
+
+function onGroupOrderSelected(sender)
+
+    if ordersbusy then return end
+    ordersbusy = true
+
+    local indices = {}
+    for i, info in pairs(shipinfos[currentShipGroup]) do
+        indices[i] = info.index
+	end
+    invokeOrdersScript(indices, ordersInfo[c_ord.cmdGroupOrder.selectedIndex])
+
+end
+
+
+function onShipOrderSelected(sender)
+
+    if ordersbusy then return end
+    ordersbusy = true
+
+    for i, cmd in pairs(c_ord.ships.cmdOrder) do
+		if cmd.index == sender.index then
+			local indices = {shipinfos[currentShipGroup][i].index}	
+            invokeOrdersScript(indices, ordersInfo[cmd.selectedIndex])
+            break
+		end
+	end
+
+end
+
+
+function onAssignShipGroupPressed(sender)
+
+end
+
+
+function onUnassignShipGroupPressed(sender)
+
+end
+
+
+function onRenameGroupPressed(sender)
+
+end
+
+
+function onGroupHudChecked(sender)
+
+end
+
+
+function displayShipState(idx, ship, currloc)
+
+    -- display basic ship states
     c_ord.ships.lblName[idx].caption = ship.name
-    c_ord.ships.lblState[idx].caption = ship.aistate
-    c_ord.ships.lblLoc[idx].caption = tostring(ship.loc)
+
+    if ship.aistate then
+        c_ord.ships.lblState[idx].caption = ship.aistate
+    else
+        c_ord.ships.lblState[idx].caption = "-"
+    end
+
+    -- location/sector of ship
+    if ship.location then 
+        if ship.location.x == currloc.x and ship.location.y == currloc.y then
+            c_ord.ships.lblLoc[idx].caption = "current"
+            c_ord.ships.lblLoc[idx].italic = true
+        else
+            c_ord.ships.lblLoc[idx].caption = tostring(ship.location) 
+            c_ord.ships.lblLoc[idx].italic = false
+        end
+    end
+
+    -- TODO: disable combobox if ship is elsewhere
 
     -- set selected order to ship's current order
     c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)
@@ -472,10 +611,10 @@ function displayShipState(idx, ship)
 end
 
 
-function refreshShipsUI(shipsdata)
+function refreshShipsUI()
 
     -- hide all ship list widgets at first
-    for s = 1, maxordgrpships do
+    for s = 1, groupshiplimit do
         c_ord.ships.frame[s]:hide()
         c_ord.ships.lblName[s]:hide()
         c_ord.ships.lblState[s]:hide()
@@ -484,13 +623,32 @@ function refreshShipsUI(shipsdata)
         c_ord.ships.cmdOrder[s]:hide()
     end
 
-    -- TODO: order ships alphabetically by their name
+    if not shipinfos then return end
 
-    for i, shipstate in pairs(shipsdata) do 
-        if i > maxordgrpships then
-            break
+    local same = true
+    local lastorder 
+    local currentcoords = vec2(Sector():getCoordinates())
+
+    for i, shipinfo in pairs(shipinfos[currentShipGroup]) do 
+        -- check if all ships have same order
+        if lastorder and lastorder ~= shipinfo.order then
+            same = false
         end
-        displayShipState(i, shipstate)       
+        lastorder = shipinfo.order
+
+        displayShipState(i, shipinfo, currentcoords)       
+    end
+
+    -- pre-select group order
+    if same then
+        for i, oi in pairs(ordersInfo) do 
+            if oi.order == lastorder then
+                c_ord.cmdGroupOrder:setSelectedIndexNoCallback(i)
+                break
+            end
+        end
+    else
+        c_ord.cmdGroupOrder:setSelectedIndexNoCallback(0)
     end
 
 end
@@ -501,49 +659,55 @@ function refreshGroupNames()
     -- update group name related labels on all tabs
     for g = 1, 4 do 
         if currentShipGroup == g then
-            c_ord.lblGroupName.caption = shipgroups[g].name
+            c_ord.lblGroupName.caption = groupconfig[g].name
         end
-        c_grp.groups.lblName[g].caption = shipgroups[g].name
-        c_conf.groups.lblName[g].caption = shipgroups[g].name
+        c_grp.groups.lblName[g].caption = groupconfig[g].name
+        c_conf.groups.lblName[g].caption = groupconfig[g].name
     end
     
 end
 
 
-function refreshGroupsUI(ships)
+function refreshGroupsUI()
 
     c_grp.lstPool:clear()
-    for _, ship in pairs(ships) do 
+    for _, ship in pairs(allships) do 
         c_grp.lstPool:addEntry(ship.name)
     end
 
-    -- TODO: sync group ship lists with existing ships 
+    -- TODO: sync group ship lists and pool list
 
 end
 
 
 function updateUI()
 
-    -- GROUPS
-    -- en/disable ship assignment buttons according to list selections
-    if c_grp.lstPool.selected ~= shipPoolLastIndex then
-        shipPoolLastIndex = c_grp.lstPool.selected
-        for i = 1, 4 do
-            c_grp.groups.btnAssign[i].active = (c_grp.lstPool.selected >= 0)
-        end     
-    end
+    if selectedtabidx == tabs.groups.index then
 
-    -- CONFIG
-    -- show selected options category widgets
-    if c_conf.lstCategories.selected ~= configCatsLastIndex then  
-        configCatsLastIndex = c_conf.lstCategories.selected
-        if configCatsLastIndex == 0 then
-            c_conf.cntCatHUD:hide()
-            c_conf.cntCatGroups:show()
-        elseif configCatsLastIndex == 1 then
-            c_conf.cntCatGroups:hide()
-            c_conf.cntCatHUD:show()
-        end        
+        -- GROUPS
+        -- en/disable ship assignment buttons according to list selections
+        if c_grp.lstPool.selected ~= shipPoolLastIndex then
+            shipPoolLastIndex = c_grp.lstPool.selected
+            for i = 1, 4 do
+                c_grp.groups.btnAssign[i].active = (c_grp.lstPool.selected >= 0)
+            end     
+        end
+
+    elseif selectedtabidx == tabs.config.index then
+
+        -- CONFIG
+        -- show selected options category widgets
+        if c_conf.lstCategories.selected ~= configCatsLastIndex then  
+            configCatsLastIndex = c_conf.lstCategories.selected
+            if configCatsLastIndex == 0 then
+                c_conf.cntCatHUD:hide()
+                c_conf.cntCatGroups:show()
+            elseif configCatsLastIndex == 1 then
+                c_conf.cntCatGroups:hide()
+                c_conf.cntCatHUD:show()
+            end        
+        end
+
     end
 
 end
@@ -552,102 +716,154 @@ end
 function updateClient(timeStep)
 
     if doupdatestates then
+
         local current = systemTimeMs()
         -- only do update if configured delay has passed
         if (current - laststateupdate) >= config.updatedelay then
-            --debugLog("triggered ship state update (time: %s)", current)
 
-            -- update ship states and refresh ship list widgets
-            updateShipStates(groupships)
+            -- get all exisiting ships (with captains) of player in current sector
+            allships = getPlayerCaptainedCrafts()
+
+            -- update ship states and refresh ships UI widgets
+            updateShipStates(shipgroups, allships)
 
             laststateupdate = current
+            ordersbusy = false
         end
+
     end
 
 end
 
 
-function onLookAtPressed(sender)
+function syncShipInfos(data)
 
-end
+    if onServer() then
+        invokeClientFunction(Player(callingPlayer), "syncShipInfos", data)
+        return
+    end
 
+    shipinfos = data
 
-function onGroupOrderSelected(sender)
-
-
-end
-
-
-function onShipOrderSelected(sender)
-
-
-end
-
-
-function onPrevPagePressed()
-
-    
-end
-
-
-function onNextPagePressed()
-
-
-end
-
-
-function onAssignShipGroupPressed(sender)
-
-
-end
-
-
-function onUnassignShipGroupPressed(sender)
-
-
-end
-
-
-function onRenameGroupPressed(sender)
-
-
-end
-
-
-function onGroupHudChecked(sender)
+    -- update infos in UI
+    if uivisible then
+        refreshShipsUI()
+    end
 
 end
 
 
 -- SERVER-SIDE FUNCTIONS
 
-function updateShipStates(ships)
+function updateShipStates(groups, allships)
 
     if onClient() then
-        invokeServerFunction("updateShipStates", ships)
+        invokeServerFunction("updateShipStates", groups, allships)
         return
     end
 
-    local data = {}
+    local statedata = {}
+    local coords = vec2(Sector():getCoordinates())
 
-    for _, ship in pairs(ships) do 
-        local entity = Entity(ship.index)
-        if entity.name == ship.name then
-            local aistate, order = getShipAIOrderState(entity)
-            table.insert(data, {
-                name = entity.name,
-                index = entity.index,
-                aistate = aistate,
-                order = order,
-                loc = vec2(Sector():getCoordinates())
-            })
-            --debugLog("updated state of ship#%s", ship.index)
+    -- create flat array of ship names to update
+    local updateships = {}
+    for _, grp in pairs(groups) do
+        for _, shp in pairs(grp) do
+            table.insert(updateships, shp)
         end
     end
 
-    --return data
-    invokeClientFunction(Player(), "refreshShipsUI", data)
+    -- compare existing ships in sector and get their states 
+    for _, ship in pairs(allships) do 
+        if tablecontains(updateships, ship.name) then
+            local entity = Entity(ship.index)
+            if entity and entity.isShip and entity.name == ship.name then
+                local aistate, order = getShipAIOrderState(entity)
+                table.insert(statedata, {
+                    name = entity.name,
+                    index = entity.index,
+                    aistate = aistate,
+                    order = order,
+                    location = coords
+                })
+                --debugLog("updated state of ship#%s", ship.index)
+            end
+        end
+    end
+
+    -- merge new and old states and group the infos
+    local newstates = {}
+    for gi, gships in pairs(groups) do
+        newstates[gi] = {}
+        for _, shipname in pairs(gships) do
+            local info
+            for _, data in pairs(statedata) do
+                if data.name == shipname then
+                    -- ship in current sector -> update info
+                    info = data
+                    break
+                end
+            end
+            if not info and shipinfos then
+                -- ship elsewhere -> reuse old info and mark it
+                for _, data in pairs(shipinfos[gi]) do
+                    if data.name == shipname then
+                        info = {
+                            name = data.name,
+                            order = data.order,
+                            location = data.location,
+                            elsewhere = true
+                        }
+                        break
+                    end
+                end
+            end
+            table.insert(newstates[gi], info)
+        end
+    end
+
+    -- set server-side data and return to client
+    shipinfos = newstates
+    invokeClientFunction(Player(callingPlayer), "syncShipInfos", shipinfos)
 
 end
 
 
+function invokeOrdersScript(shipindices, orderinfo)
+
+    -- make this function run server-side only
+    if onClient() then
+        invokeServerFunction("invokeOrdersScript", shipindices, orderinfo)
+        return
+    end
+
+    for _, idx in pairs(shipindices) do
+
+        local ship = Entity(idx)
+        if ship and ship.isShip then
+            if not ship:hasScript(orderinfo.script) then
+                debugLog("invokeOrdersScript() --> ship: %s (%s) is missing script '%s'!", idx, orderinfo.script)
+                return
+            end
+            debugLog("invokeOrdersScript() --> ship: %s (%s) | order: %s | script: %s | func: %s", ship.name, ship.index, orderinfo.order, orderinfo.script, orderinfo.func)
+            ship:invokeFunction(orderinfo.script, orderinfo.func, idx) 
+        else
+            debugLog("invokeOrdersScript() --> no ship/entity with index %s found!", idx)
+        end
+
+    end
+
+end
+
+
+function requestShipInfoSync()
+
+    if onClient() then
+        invokeServerFunction("requestShipInfoSync")
+        return
+    end
+
+    debugLog("shipinfo sync requested")
+    invokeClientFunction(Player(callingPlayer), "syncShipInfos", shipinfos)
+
+end
