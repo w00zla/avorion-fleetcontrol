@@ -155,7 +155,7 @@ end
 
 
 function getIcon(seed, rarity)
-    return "data/textures/icons/caged-ball.png"
+    return "data/textures/icons/fleetcontrol/commander.png"
 end
 
 
