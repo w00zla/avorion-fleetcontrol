@@ -153,7 +153,7 @@ function getPlayerCaptainedCrafts()
 
     local playerentities = {Sector():getEntitiesByFaction(player.index)}
     for _, e in pairs(playerentities) do
-        if e.index ~= player.craftIndex and e.isShip and checkCaptain(e) then
+        if e.isShip and checkCaptain(e) then
             table.insert(ships, { name=e.name, index=e.index })
         end
     end

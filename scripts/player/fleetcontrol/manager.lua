@@ -17,7 +17,6 @@ require "fleetcontrol.common"
 
 
 local lastCraft
-local storage = "notyet"
 
 
 function initialize()
@@ -34,10 +33,8 @@ end
 -- given return values are persisted into galaxy database
 function secure()
 
-    scriptLog("manager.lua -> secure() called")
-
-    if storage then
-        return storage
+    if lastCraft then
+        return lastCraft
     end
     
 end
@@ -47,9 +44,7 @@ end
 -- given arguments are persisted return values of secure() function 
 function restore(data)
 
-    scriptLog("manager.lua -> restore() called")
-
-    storage = data
+    lastCraft = data
     
 end
 
@@ -79,10 +74,13 @@ end
 
 function removeScripts()
 
-    -- remove scripts from all ship entities
+    -- TODO: remove scripts from all ships in sector
+
+    -- remove scripts(s) from player ship
     local currentCraft = Player().craftIndex
     removeEntityScript(currentCraft, fc_script_controlui)
     
+    -- remove scripts(s) from last known ship for sakes
     if lastCraft ~= currentCraft then
         removeEntityScript(lastCraft, fc_script_controlui)
     end

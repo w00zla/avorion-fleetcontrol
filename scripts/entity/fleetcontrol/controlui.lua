@@ -118,11 +118,25 @@ function initialize()
     }
  
     shipgroups = {
-        { "Craft 1", "Craft 2" },
+        { "Craft", "Craft 1", "Craft 2" },
         { "Craft 3" },
         {},
         {}
     }
+
+end
+
+
+function secure()
+
+    return shipinfos
+
+end
+
+
+function restore(data)
+
+    shipinfos = data
 
 end
 
@@ -134,14 +148,6 @@ end
 
 function interactionPossible(player)
     return true, ""
-end
-
-
-function onSectorChanged()
-
-    -- TODO: persist ship locations and orders
-    -- (or just use ship.scripts which callback!)
-
 end
 
 
@@ -528,8 +534,12 @@ function onGroupOrderSelected(sender)
     ordersbusy = true
 
     local indices = {}
+    local pshipIndex = Player().craftIndex
+
     for i, info in pairs(shipinfos[currentShipGroup]) do
-        indices[i] = info.index
+        if info.index ~= pshipIndex then
+            indices[i] = info.index
+        end
 	end
     invokeOrdersScript(indices, ordersInfo[c_ord.cmdGroupOrder.selectedIndex])
 
@@ -578,39 +588,44 @@ function displayShipState(idx, ship, currloc)
 
     -- display basic ship states
     c_ord.ships.lblName[idx].caption = ship.name
+    c_ord.ships.lblName[idx]:show()
 
-    if ship.aistate then
-        c_ord.ships.lblState[idx].caption = ship.aistate
+    if ship.isplayer then
+        c_ord.ships.lblState[idx].caption = "Player"
     else
-        c_ord.ships.lblState[idx].caption = "-"
+        c_ord.ships.lblState[idx].caption = ship.aistate or "-"
     end
+    c_ord.ships.lblState[idx].bold = ship.isplayer or false
+    c_ord.ships.lblState[idx]:show()
 
     -- location/sector of ship
     if ship.location then 
-        if ship.location.x == currloc.x and ship.location.y == currloc.y then
+        local loc = vec2(ship.location.x, ship.location.y)
+        if  loc.x == currloc.x and loc.y == currloc.y then
             c_ord.ships.lblLoc[idx].caption = "current"
             c_ord.ships.lblLoc[idx].italic = true
         else
-            c_ord.ships.lblLoc[idx].caption = tostring(ship.location) 
+            c_ord.ships.lblLoc[idx].caption = tostring(loc) 
             c_ord.ships.lblLoc[idx].italic = false
         end
+        c_ord.ships.lblLoc[idx]:show()
+        c_ord.ships.btnLook[idx]:show() 
     end
-
-    -- TODO: disable combobox if ship is elsewhere
-
-    -- set selected order to ship's current order
+   
     if ship.order then
-        if ship.elsewhere then
+        if ship.elsewhere or ship.isplayer then
+            -- disable orders combobox if ship is controlled by player or elsewhere
+            c_ord.ships.lblOrder[idx].caption = "-"
             for i, oi in pairs(ordersInfo) do 
                 if oi.order == ship.order then
                     c_ord.ships.lblOrder[idx].caption = oi.text
                     break
                 end
             end
-            c_ord.ships.cmdOrder[idx]:hide()
             c_ord.ships.lblOrder[idx]:show()
         else
-            c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)
+            -- set selected order to ship's current order
+            c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)    
             for i, oi in pairs(ordersInfo) do 
                 if oi.order == ship.order then
                     c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(i)
@@ -619,15 +634,13 @@ function displayShipState(idx, ship, currloc)
             end
             c_ord.ships.cmdOrder[idx]:show()
         end
-        
+    elseif not ship.isplayer then
+        c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)
+        c_ord.ships.cmdOrder[idx]:show()
     end
 
-    -- ensure all ship widgets are visible
-    if not c_ord.ships.frame[idx].visible then c_ord.ships.frame[idx]:show() end
-    if not c_ord.ships.lblName[idx].visible then c_ord.ships.lblName[idx]:show() end
-    if not c_ord.ships.lblState[idx].visible then c_ord.ships.lblState[idx]:show() end
-    if not c_ord.ships.lblLoc[idx].visible then c_ord.ships.lblLoc[idx]:show() end
-    if not c_ord.ships.btnLook[idx].visible then c_ord.ships.btnLook[idx]:show() end
+    -- make rest of ship related widgets visible
+    c_ord.ships.frame[idx]:show() 
 
 end
 
@@ -647,14 +660,14 @@ function refreshShipsUI()
 
     if not shipinfos then return end
 
-    local same = true
+    local ordersequal = true
     local lastorder 
     local currentcoords = vec2(Sector():getCoordinates())
 
     for i, shipinfo in pairs(shipinfos[currentShipGroup]) do 
-        -- check if all ships have same order
+        -- check if all ships have same order/state
         if lastorder and lastorder ~= shipinfo.order then
-            same = false
+            ordersequal = false
         end
         lastorder = shipinfo.order
 
@@ -662,7 +675,7 @@ function refreshShipsUI()
     end
 
     -- pre-select group order
-    if same then
+    if ordersequal then
         for i, oi in pairs(ordersInfo) do 
             if oi.order == lastorder then
                 c_ord.cmdGroupOrder:setSelectedIndexNoCallback(i)
@@ -785,7 +798,8 @@ function updateShipStates(groups, allships)
     end
 
     local statedata = {}
-    local coords = vec2(Sector():getCoordinates())
+    local cx, cy = Sector():getCoordinates()
+    local coords = {x=cx, y=cy}
 
     -- create flat array of ship names to update
     local updateships = {}
@@ -795,20 +809,30 @@ function updateShipStates(groups, allships)
         end
     end
 
+    local pshipIndex = Player(callingPlayer).craftIndex
+
     -- compare existing ships in sector and get their states 
     for _, ship in pairs(allships) do 
         if tablecontains(updateships, ship.name) then
             local entity = Entity(ship.index)
             if entity and entity.isShip and entity.name == ship.name then
-                local aistate, order = getShipAIOrderState(entity)
-                table.insert(statedata, {
-                    name = entity.name,
-                    index = entity.index,
-                    aistate = aistate,
-                    order = order,
-                    location = coords
-                })
-                --debugLog("updated state of ship#%s", ship.index)
+                -- TODO: check also if ship is controlled by another player
+                if entity.index == pshipIndex then
+                    table.insert(statedata, {
+                        name = entity.name,
+                        index = entity.index,
+                        isplayer = true
+                    })
+                else
+                    local aistate, order = getShipAIOrderState(entity)
+                    table.insert(statedata, {
+                        name = entity.name,
+                        index = entity.index,
+                        aistate = aistate,
+                        order = order,
+                        location = coords
+                    })
+                end
             end
         end
     end
