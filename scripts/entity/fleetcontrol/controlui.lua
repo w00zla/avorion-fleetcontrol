@@ -14,6 +14,7 @@ require "utility"
 require "stringutility"
 
 require "fleetcontrol.common"
+json = require("fleetcontrol.json")
 
 
 -- client / UI vars
@@ -74,6 +75,7 @@ local ordersInfo
 local groupshiplimit = 12
 local shipPoolLastIndex
 local configCatsLastIndex
+local groupListsLastIndices = {}
 local currentShipGroup = 1
 
 local selectedtabidx
@@ -89,40 +91,51 @@ function initialize()
         return
     end
 
-    config = getConfig()
+    -- TODO: load some configs from server (i.e. updatedelay)
+
+    config = getConfig("player")
     ordersInfo = getOrdersInfo()
 
-    -- TODO: load belows from config
+    groupconfig = config.groupconfig
+    if groupconfig then
+        groupconfig = json.parse(groupconfig)
+    else
+        groupconfig = {
+            {
+                name="Group 1",
+                showhud=false,
+                hudcolor={a=0.5,r=1,g=1,b=1}
+            },
+            {
+                name="Group 2",
+                showhud=false,
+                hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
+            },
+            {
+                name="Group 3",
+                showhud=false,
+                hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
+            },
+            {
+                name="Group 4",
+                showhud=false,
+                hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
+            }    
+        }
+    end
 
-    groupconfig = {
-        {
-            name="Group 1",
-            showhud=false,
-            hudcolor={a=0.5,r=1,g=1,b=1}
-        },
-        {
-            name="Group 2",
-            showhud=false,
-            hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
-        },
-        {
-            name="CustomName",
-            showhud=false,
-            hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
-        },
-        {
-            name="Group 4",
-            showhud=false,
-            hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
-        }    
-    }
- 
-    shipgroups = {
-        { "Craft", "Craft 1", "Craft 2" },
-        { "Craft 3" },
-        {},
-        {}
-    }
+    shipgroups = config.shipgroups
+    if shipgroups then
+        shipgroups = json.parse(shipgroups)
+    else
+        shipgroups = { {},{},{},{} }
+        -- shipgroups = {
+        --     { "Craft", "Craft 1", "Craft 2" },
+        --     { "Craft 3" },
+        --     {},
+        --     {}
+        -- }
+    end
 
 end
 
@@ -566,10 +579,40 @@ end
 
 function onAssignShipGroupPressed(sender)
 
+    local shipname = c_grp.lstPool:getEntry(c_grp.lstPool.selected)
+
+    for i, btn in pairs(c_grp.groups.btnAssign) do
+		if btn.index == sender.index then
+            -- update config data
+            table.insert(shipgroups[i], shipname)
+            local strval = json.stringify(shipgroups)
+            config.shipgroups = strval
+
+            -- update list widgets
+            c_grp.groups.lstShips[i]:addEntry(shipname)
+            c_grp.lstPool:removeEntry(c_grp.lstPool.selected)
+            break
+		end
+	end
+
 end
 
 
 function onUnassignShipGroupPressed(sender)
+
+    for i, btn in pairs(c_grp.groups.btnUnassign) do
+		if btn.index == sender.index then
+            -- update config data
+            table.remove(shipgroups[i], c_grp.groups.lstShips[i].selected + 1)
+            config.shipgroups = json.stringify(shipgroups)
+
+            -- update list widgets
+            local shipname = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)       
+            c_grp.lstPool:addEntry(shipname)
+            c_grp.groups.lstShips[i]:removeEntry(c_grp.groups.lstShips[i].selected)
+            break
+		end
+	end
 
 end
 
@@ -706,11 +749,23 @@ end
 function refreshGroupsUI()
 
     c_grp.lstPool:clear()
-    for _, ship in pairs(allships) do 
-        c_grp.lstPool:addEntry(ship.name)
+    for i = 1, #shipgroups do
+        c_grp.groups.lstShips[i]:clear()
     end
 
-    -- TODO: sync group ship lists and pool list
+    for _, ship in pairs(allships) do 
+        local assigned = false
+        for i, shipgrp in pairs(shipgroups) do 
+            if tablecontains(shipgrp, ship.name) then
+                c_grp.groups.lstShips[i]:addEntry(ship.name)
+                assigned = true
+                break
+            end      
+        end
+        if not assigned then
+            c_grp.lstPool:addEntry(ship.name)
+        end
+    end
 
 end
 
@@ -724,8 +779,14 @@ function updateUI()
         if c_grp.lstPool.selected ~= shipPoolLastIndex then
             shipPoolLastIndex = c_grp.lstPool.selected
             for i = 1, 4 do
-                c_grp.groups.btnAssign[i].active = (c_grp.lstPool.selected >= 0)
+                c_grp.groups.btnAssign[i].active = (shipPoolLastIndex >= 0)
             end     
+        end
+        for i = 1, 4 do 
+            if c_grp.groups.lstShips[i].selected ~= groupListsLastIndices[i] then
+                groupListsLastIndices[i] = c_grp.groups.lstShips[i].selected
+                c_grp.groups.btnUnassign[i].active = (groupListsLastIndices[i] >= 0)
+            end
         end
 
     elseif selectedtabidx == tabs.config.index then
@@ -758,6 +819,8 @@ function updateClient(timeStep)
 
             -- get all exisiting ships (with captains) of player in current sector
             allships = getPlayerCaptainedCrafts()
+
+            -- TODO: sort allships alphabetically
 
             -- update ship states and refresh ships UI widgets
             updateShipStates(shipgroups, allships)

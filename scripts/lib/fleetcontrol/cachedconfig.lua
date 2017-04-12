@@ -116,11 +116,11 @@ end
 
 -- wrap the lookup of existing properties
 CachedConfig.__index = function(t, k) 
-    local value = rawget(t, k)
+    local value = rawget(t, "_c_"..k)
     if value == nil then 
         -- load value from storage and cache result in table 
         value = loadValue(k, rawget(t, "_scope"), rawget(t, "_index"), rawget(t, "_prefix"), rawget(t, "_defaults"))
-        rawset(t, k, value)
+        rawset(t, "_c_"..k, value)
     end
     return value
 end
@@ -128,11 +128,11 @@ end
 
 -- wrap the assignment of property values
 CachedConfig.__newindex = function(t, k, v)  
-    local value = rawget(t, k)
+    local value = rawget(t, "_c_"..k)
     if (v ~= value) then
         -- save value to storage and update cached result in table 
         saveValue(rawget(t, "_scope"), rawget(t, "_index"), rawget(t, "_prefix"), k, v)
-        rawset(t, k, v) 
+        rawset(t, "_c_"..k, v) 
     end
 end
 

@@ -47,9 +47,10 @@ local ordersInfo = {
 }
 
 
-function getConfig()
-    return myconfig
+function getConfig(scope)
+    return CachedConfig(configprefix, configdefaults, scope)
 end
+
 
 function getOrdersInfo()
     return ordersInfo
