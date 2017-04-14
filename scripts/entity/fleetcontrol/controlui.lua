@@ -30,8 +30,8 @@ local tabs = {
 local c_ord = {
     btnPrevPage = nil,
     btnNextPage = nil,
-    lblGroupName = nil,
-    cmdGroupOrder = nil,
+    lblGroupName = {},
+    cmdGroupOrder = {},
     ships = {
         frame = {},
         lblName = {},
@@ -72,11 +72,12 @@ local allships
 local config
 local ordersInfo
 
-local groupshiplimit = 12
+local ordergroupslimit = 2
+local groupshiplimit = 6
 local shipPoolLastIndex
 local configCatsLastIndex
 local groupListsLastIndices = {}
-local currentShipGroup = 1
+local currentPage = 1
 
 local selectedtabidx
 local uivisible = false
@@ -189,7 +190,7 @@ end
 
 function initUI()
 
-    local size = vec2(800, 650)
+    local size = vec2(800, 700)
     local res = getResolution()
 
     -- create window
@@ -204,10 +205,10 @@ function initUI()
     tabs.window = mywindow:createTabbedWindow(Rect(vec2(10, 10), size - 10))
     tabs.window.onSelectedFunction = "onTabSelected"
 
-    tabs.orders = tabs.window:createTab("Orders", "data/textures/icons/back-forth.png", "Fleet Orders")
+    tabs.orders = tabs.window:createTab("Orders", "data/textures/icons/fleetcontrol/commander.png", "Fleet Orders")
     buildOrdersUI(tabs.orders)
 
-    tabs.groups = tabs.window:createTab("Groups", "data/textures/icons/backup.png", "Fleet Groups")
+    tabs.groups = tabs.window:createTab("Groups", "data/textures/icons/fleetcontrol/shipgroups.png", "Fleet Groups")
     buildGroupsUI(tabs.groups)
 
     tabs.config = tabs.window:createTab("Config", "data/textures/icons/gears.png", "Configuration")
@@ -227,99 +228,113 @@ function buildOrdersUI(parent)
     c_ord.btnPrevPage.active = false
     c_ord.btnNextPage = parent:createButton(Rect(size.x - 60, size.y - 40, size.x - 10, size.y - 10), ">", "onNextPagePressed")	
     
-    local split_grp = UIVerticalSplitter(Rect(10, 10, size.x - 10, 40), 10, 0, 0.5)
-    split_grp.rightSize = 250
+    local y_grp = 0
+    for g = 1, ordergroupslimit do
 
-    local xl = split_grp.left.lower.x
-    local xu = split_grp.left.upper.x
+        local split_grp = UIVerticalSplitter(Rect(10, y_grp, size.x - 10, y_grp + 30), 10, 0, 0.5)
+        split_grp.rightSize = 250
 
-    -- group widgets
-    local groupname = parent:createLabel(vec2(xl, 10), "", 17)
-    local cbox = parent:createComboBox(split_grp.right, "onGroupOrderSelected")
-    cbox:addEntry("-")
-    for _, btninfo in pairs(ordersInfo) do
-        cbox:addEntry(btninfo.text)
-    end    
+        local xl = split_grp.left.lower.x
+        local xu = split_grp.left.upper.x
 
-    --cbox:hide()
-    c_ord.lblGroupName = groupname
-    c_ord.cmdGroupOrder = cbox
-    
-    -- create ship list widgets 
-    local nameLabelX = 10
-    local stateLabelX = -200
-    local locLabelX = -85
-
-    local y_shp = 65
-    for s = 1, groupshiplimit do 
-
-        local yText = y_shp + 16
-        
-        local split1 = UIVerticalSplitter(Rect(10, y_shp, size.x - 10, y_shp +  50), 10, 10, 0.5)
-        split1.rightSize = 210
-
-        local frame = parent:createFrame(split1.left)        
-        
-        local xl = split1.left.lower.x
-        local xu = split1.left.upper.x    
-
-        -- captions
-        if s == 01 then
-            local cap1 = parent:createLabel(vec2(xl + nameLabelX, 50), "Ship", 15)
-            local cap2 = parent:createLabel(vec2(xu + stateLabelX, 50), "State", 15)
-            local cap3 = parent:createLabel(vec2(xu + locLabelX, 50), "Sector", 15)
-            cap1.color = ColorRGB(0.2, 0.2, 0.2)
-            cap2.color = ColorRGB(0.2, 0.2, 0.2)
-            cap3.color = ColorRGB(0.2, 0.2, 0.2)
-        end     
-        
-        -- ship labels
-        local nameLabel = parent:createLabel(vec2(xl + nameLabelX, yText), "", 15)
-        local stateLabel = parent:createLabel(vec2(xu + stateLabelX, yText), "", 15)
-        local locLabel = parent:createLabel(vec2(xu + locLabelX, yText), "", 15)
-        
-        nameLabel.font = "Arial"
-        stateLabel.font = "Arial"
-        locLabel.font = "Arial"
-        
-        -- ship controls
-        local split2 = UIVerticalSplitter(split1.right, 25, 0, 0.5)
-        split2.leftSize = 30
-
-        local lookat = parent:createButton(split2.left, "", "onLookAtPressed")
-        lookat.icon = "data/textures/icons/look-at.png"
-
-        if s == 01 then
-            local cap4 = parent:createLabel(vec2(split2.right.lower.x, 50), "Order", 15)
-            cap4.color = ColorRGB(0.2, 0.2, 0.2)
-        end     
-
-        local cbox = parent:createComboBox(split2.right, "onShipOrderSelected")
+        -- group widgets
+        local groupname = parent:createLabel(vec2(xl, y_grp + 4), "", 17)
+        local cbox = parent:createComboBox(split_grp.right, "onGroupOrderSelected")
         cbox:addEntry("-")
         for _, btninfo in pairs(ordersInfo) do
             cbox:addEntry(btninfo.text)
+        end    
+
+        c_ord.lblGroupName[g] = groupname
+        c_ord.cmdGroupOrder[g] = cbox
+        
+        -- create ship list widgets 
+        local nameLabelX = 10
+        local stateLabelX = -200
+        local locLabelX = -85
+
+        c_ord.ships.frame[g] = {}
+        c_ord.ships.lblName[g] = {}
+        c_ord.ships.lblState[g] = {}
+        c_ord.ships.lblLoc[g] = {}
+        c_ord.ships.btnLook[g] = {}
+        c_ord.ships.cmdOrder[g] = {}
+        c_ord.ships.lblOrder[g] = {}
+
+        local y_shp = y_grp + 15
+        for s = 1, groupshiplimit do 
+
+            y_shp = y_shp + 35
+            local yText = y_shp + 16
+            
+            local split1 = UIVerticalSplitter(Rect(10, y_shp, size.x - 10, y_shp +  50), 10, 10, 0.5)
+            split1.rightSize = 210
+
+            local frame = parent:createFrame(split1.left)        
+            
+            local xl = split1.left.lower.x
+            local xu = split1.left.upper.x    
+
+            -- captions
+            if s == 1 then
+                local cap1 = parent:createLabel(vec2(xl + nameLabelX, y_grp + 35), "Ship", 15)
+                local cap2 = parent:createLabel(vec2(xu + stateLabelX, y_grp + 35), "State", 15)
+                local cap3 = parent:createLabel(vec2(xu + locLabelX, y_grp + 35), "Sector", 15)
+                cap1.color = ColorRGB(0.2, 0.2, 0.2)
+                cap2.color = ColorRGB(0.2, 0.2, 0.2)
+                cap3.color = ColorRGB(0.2, 0.2, 0.2)
+            end     
+            
+            -- ship labels
+            local nameLabel = parent:createLabel(vec2(xl + nameLabelX, yText), "", 15)
+            local stateLabel = parent:createLabel(vec2(xu + stateLabelX, yText), "", 15)
+            local locLabel = parent:createLabel(vec2(xu + locLabelX, yText), "", 15)
+            
+            nameLabel.font = "Arial"
+            stateLabel.font = "Arial"
+            locLabel.font = "Arial"
+            
+            -- ship controls
+            local split2 = UIVerticalSplitter(split1.right, 25, 0, 0.5)
+            split2.leftSize = 30
+
+            local lookat = parent:createButton(split2.left, "", "onLookAtPressed")
+            lookat.icon = "data/textures/icons/look-at.png"
+
+            if s == 01 then
+                local cap4 = parent:createLabel(vec2(split2.right.lower.x, y_grp + 35), "Order", 15)
+                cap4.color = ColorRGB(0.2, 0.2, 0.2)
+            end     
+
+            local cbox = parent:createComboBox(split2.right, "onShipOrderSelected")
+            cbox:addEntry("-")
+            for _, btninfo in pairs(ordersInfo) do
+                cbox:addEntry(btninfo.text)
+            end
+
+            local orderLabel = parent:createLabel(vec2(split2.right.lower.x, split2.right.lower.y + 6), "", 15)
+
+            -- hide controls initially and add to reference table
+            frame:hide()
+            nameLabel:hide()
+            stateLabel:hide()
+            locLabel:hide()
+            lookat:hide()
+            cbox:hide()
+            orderLabel:hide()
+
+            c_ord.ships.frame[g][s] = frame
+            c_ord.ships.lblName[g][s] = nameLabel
+            c_ord.ships.lblState[g][s] = stateLabel
+            c_ord.ships.lblLoc[g][s] = locLabel
+            c_ord.ships.btnLook[g][s] = lookat
+            c_ord.ships.cmdOrder[g][s] = cbox
+            c_ord.ships.lblOrder[g][s] = orderLabel
+	   
         end
 
-        local orderLabel = parent:createLabel(vec2(split2.right.lower.x, split2.right.lower.y + 6), "", 15)
+        y_grp = y_shp + 65
 
-        -- hide controls initially and add to reference table
-        frame:hide()
-        nameLabel:hide()
-        stateLabel:hide()
-        locLabel:hide()
-        lookat:hide()
-        cbox:hide()
-        orderLabel:hide()
-
-        table.insert(c_ord.ships.frame, frame)
-        table.insert(c_ord.ships.lblName, nameLabel)
-        table.insert(c_ord.ships.lblState, stateLabel)
-        table.insert(c_ord.ships.lblLoc, locLabel)
-        table.insert(c_ord.ships.btnLook, lookat)
-        table.insert(c_ord.ships.cmdOrder, cbox)
-        table.insert(c_ord.ships.lblOrder, orderLabel)
-            
-        y_shp = y_shp + 35	   
     end
 
 end
@@ -399,6 +414,21 @@ end
 
 
 function buildConfigUI(parent)
+
+    -- IDEAS for configs
+    --------------------
+    -- "General" category:
+    -- # close window on "look at" click if ship in sector
+    --
+    -- "HUD" category:
+    -- # enable/disable certain info output and various styles (vert/horz listing etc)
+    -- # alter location of hud with offset values from top, left, right, bottom
+    --
+    -- "Custom Orders" category for option related to "builtin" custom orders
+    --
+    -- "Integration" category for options regarding other mods
+
+
 
     local size = parent.size
 
@@ -482,7 +512,7 @@ function onTabSelected()
 
     if tabs.groups and tabs.groups.index == selectedtabidx then
         -- update groups tab widgets
-        refreshGroupsUI()
+        refreshGroupsUIShips()
     end
 
 end
@@ -490,12 +520,12 @@ end
 
 function onPrevPagePressed()
     
-    currentShipGroup = currentShipGroup - 1
+    currentPage = currentPage - 1
     laststateupdate = 0
 
-    c_ord.lblGroupName.caption = groupconfig[currentShipGroup].name
+    refreshGroupNames()
 
-    if currentShipGroup == 1 then
+    if currentPage == 1 then
         c_ord.btnPrevPage.active = false
     end
     c_ord.btnNextPage.active = true
@@ -505,12 +535,12 @@ end
 
 function onNextPagePressed()
 
-    currentShipGroup = currentShipGroup + 1
+    currentPage = currentPage + 1
     laststateupdate = 0
 
-    c_ord.lblGroupName.caption = groupconfig[currentShipGroup].name
+    refreshGroupNames()
 
-    if currentShipGroup == 4 then
+    if currentPage == 2 then
         c_ord.btnNextPage.active = false
     end
     c_ord.btnPrevPage.active = true
@@ -520,28 +550,40 @@ end
 
 function onLookAtPressed(sender)
 
-    for i, btn in pairs(c_ord.ships.btnLook) do
-		if btn.index == sender.index then
-            if shipinfos[currentShipGroup][i].index then
-                local entity = Entity(shipinfos[currentShipGroup][i].index)
-			    if entity then
-				    Player().selectedObject = entity
-                end
-			elseif shipinfos[currentShipGroup][i].location then
-                local coords = shipinfos[currentShipGroup][i].location
-				GalaxyMap():setSelectedCoordinates(coords.x, coords.y)
-				GalaxyMap():show(coords.x, coords.y)
-			end
-			
-		end
-	end
+    for i, g in orderGroupsIter() do
+        for s, btn in pairs(c_ord.ships.btnLook[i]) do
+            if btn.index == sender.index then
+                if shipinfos[g][s].index then
+                    local entity = Entity(shipinfos[g][s].index)
+                    if entity then
+                        Player().selectedObject = entity
+                    end
+                    return
+                elseif shipinfos[g][s].location then
+                    local coords = shipinfos[g][s].location
+                    GalaxyMap():setSelectedCoordinates(coords.x, coords.y)
+                    GalaxyMap():show(coords.x, coords.y)
+                    return
+                end               
+            end
+        end
+    end
 
 end
 
 
 function onGroupOrderSelected(sender)
 
-    if c_ord.cmdGroupOrder.selectedIndex < 1 then return end
+    local cbox, grp
+    for i, g in orderGroupsIter() do
+        if sender.index == c_ord.cmdGroupOrder[i].index then
+            cbox = c_ord.cmdGroupOrder[i]
+            grp = g
+            break
+        end
+    end
+
+    if cbox.selectedIndex < 1 then return end
 
     if ordersbusy then return end
     ordersbusy = true
@@ -549,12 +591,13 @@ function onGroupOrderSelected(sender)
     local indices = {}
     local pshipIndex = Player().craftIndex
 
-    for i, info in pairs(shipinfos[currentShipGroup]) do
+    -- issue orders to all group ships excluding player driven ships
+    for i, info in pairs(shipinfos[grp]) do
         if info.index ~= pshipIndex then
             indices[i] = info.index
         end
 	end
-    invokeOrdersScript(indices, ordersInfo[c_ord.cmdGroupOrder.selectedIndex])
+    invokeOrdersScript(indices, ordersInfo[cbox.selectedIndex])
 
 end
 
@@ -564,15 +607,17 @@ function onShipOrderSelected(sender)
     if ordersbusy then return end
     ordersbusy = true
 
-    for i, cmd in pairs(c_ord.ships.cmdOrder) do
-		if cmd.index == sender.index then
-            if cmd.selectedIndex < 1 then return end
+    for i, g in orderGroupsIter() do
+        for s, cmd in pairs(c_ord.ships.cmdOrder[i]) do
+            if cmd.index == sender.index then
+                if cmd.selectedIndex < 1 then return end
 
-			local indices = {shipinfos[currentShipGroup][i].index}	
-            invokeOrdersScript(indices, ordersInfo[cmd.selectedIndex])
-            break
-		end
-	end
+                local indices = {shipinfos[g][s].index}	
+                invokeOrdersScript(indices, ordersInfo[cmd.selectedIndex])
+                break
+            end
+        end
+    end
 
 end
 
@@ -595,6 +640,8 @@ function onAssignShipGroupPressed(sender)
 		end
 	end
 
+    refreshGroupsUIButtons(true)
+
 end
 
 
@@ -614,6 +661,8 @@ function onUnassignShipGroupPressed(sender)
 		end
 	end
 
+    refreshGroupsUIButtons(true)
+
 end
 
 
@@ -627,106 +676,114 @@ function onGroupHudChecked(sender)
 end
 
 
-function displayShipState(idx, ship, currloc)
+function displayShipState(g, s, ship, currloc)
+
+    if g > ordergroupslimit or s > groupshiplimit then return end
 
     -- display basic ship states
-    c_ord.ships.lblName[idx].caption = ship.name
-    c_ord.ships.lblName[idx]:show()
+    c_ord.ships.lblName[g][s].caption = ship.name
+    c_ord.ships.lblName[g][s]:show()
 
     if ship.isplayer then
-        c_ord.ships.lblState[idx].caption = "Player"
+        c_ord.ships.lblState[g][s].caption = "Player"
     else
-        c_ord.ships.lblState[idx].caption = ship.aistate or "-"
+        c_ord.ships.lblState[g][s].caption = ship.aistate or "-"
     end
-    c_ord.ships.lblState[idx].bold = ship.isplayer or false
-    c_ord.ships.lblState[idx]:show()
+    c_ord.ships.lblState[g][s].bold = ship.isplayer or false
+    c_ord.ships.lblState[g][s]:show()
 
     -- location/sector of ship
     if ship.location then 
         local loc = vec2(ship.location.x, ship.location.y)
         if  loc.x == currloc.x and loc.y == currloc.y then
-            c_ord.ships.lblLoc[idx].caption = "current"
-            c_ord.ships.lblLoc[idx].italic = true
+            c_ord.ships.lblLoc[g][s].caption = "current"
+            c_ord.ships.lblLoc[g][s].italic = true
         else
-            c_ord.ships.lblLoc[idx].caption = tostring(loc) 
-            c_ord.ships.lblLoc[idx].italic = false
+            c_ord.ships.lblLoc[g][s].caption = tostring(loc) 
+            c_ord.ships.lblLoc[g][s].italic = false
         end
-        c_ord.ships.lblLoc[idx]:show()
-        c_ord.ships.btnLook[idx]:show() 
+        c_ord.ships.lblLoc[g][s]:show()
+        c_ord.ships.btnLook[g][s]:show() 
     end
    
     if ship.order then
         if ship.elsewhere or ship.isplayer then
             -- disable orders combobox if ship is controlled by player or elsewhere
-            c_ord.ships.lblOrder[idx].caption = "-"
+            c_ord.ships.lblOrder[g][s].caption = "-"
             for i, oi in pairs(ordersInfo) do 
                 if oi.order == ship.order then
-                    c_ord.ships.lblOrder[idx].caption = oi.text
+                    c_ord.ships.lblOrder[g][s].caption = oi.text
                     break
                 end
             end
-            c_ord.ships.lblOrder[idx]:show()
+            c_ord.ships.lblOrder[g][s]:show()
         else
             -- set selected order to ship's current order
-            c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)    
+            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)    
             for i, oi in pairs(ordersInfo) do 
                 if oi.order == ship.order then
-                    c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(i)
+                    c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
                     break
                 end
             end
-            c_ord.ships.cmdOrder[idx]:show()
+            c_ord.ships.cmdOrder[g][s]:show()
         end
     elseif not ship.isplayer then
-        c_ord.ships.cmdOrder[idx]:setSelectedIndexNoCallback(1)
-        c_ord.ships.cmdOrder[idx]:show()
+        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
+        c_ord.ships.cmdOrder[g][s]:show()
     end
 
     -- make rest of ship related widgets visible
-    c_ord.ships.frame[idx]:show() 
+    c_ord.ships.frame[g][s]:show() 
 
 end
 
 
-function refreshShipsUI()
+function refreshOrdersUI()
 
     -- hide all ship list widgets at first
-    for s = 1, groupshiplimit do
-        c_ord.ships.frame[s]:hide()
-        c_ord.ships.lblName[s]:hide()
-        c_ord.ships.lblState[s]:hide()
-        c_ord.ships.lblLoc[s]:hide()
-        c_ord.ships.btnLook[s]:hide()
-        c_ord.ships.cmdOrder[s]:hide()
-        c_ord.ships.lblOrder[s]:hide()
+    for g = 1, ordergroupslimit do
+        for s = 1, groupshiplimit do
+            c_ord.ships.frame[g][s]:hide()
+            c_ord.ships.lblName[g][s]:hide()
+            c_ord.ships.lblState[g][s]:hide()
+            c_ord.ships.lblLoc[g][s]:hide()
+            c_ord.ships.btnLook[g][s]:hide()
+            c_ord.ships.cmdOrder[g][s]:hide()
+            c_ord.ships.lblOrder[g][s]:hide()
+        end
     end
 
     if not shipinfos then return end
 
-    local ordersequal = true
-    local lastorder 
+    
     local currentcoords = vec2(Sector():getCoordinates())
 
-    for i, shipinfo in pairs(shipinfos[currentShipGroup]) do 
-        -- check if all ships have same order/state
-        if lastorder and lastorder ~= shipinfo.order then
-            ordersequal = false
-        end
-        lastorder = shipinfo.order
+    for i, g in orderGroupsIter() do
+        local ordersequal = #shipinfos[g] > 0
+        local lastorder 
 
-        displayShipState(i, shipinfo, currentcoords)       
-    end
-
-    -- pre-select group order
-    if ordersequal then
-        for i, oi in pairs(ordersInfo) do 
-            if oi.order == lastorder then
-                c_ord.cmdGroupOrder:setSelectedIndexNoCallback(i)
-                break
+        for s, shipinfo in pairs(shipinfos[g]) do 
+            -- check if all ships have same order/state
+            if lastorder and lastorder ~= shipinfo.order then
+                ordersequal = false
             end
+            lastorder = shipinfo.order
+
+            displayShipState(i, s, shipinfo, currentcoords)       
         end
-    else
-        c_ord.cmdGroupOrder:setSelectedIndexNoCallback(0)
+
+        -- pre-select group order
+        if ordersequal then
+            for j, oi in pairs(ordersInfo) do 
+                if oi.order == lastorder then
+                    c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
+                    break
+                end
+            end
+        else
+            c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(0)
+        end
     end
 
 end
@@ -734,11 +791,13 @@ end
 
 function refreshGroupNames()
 
-    -- update group name related labels on all tabs
+    -- Orders tab
+    for i, g in orderGroupsIter() do
+        c_ord.lblGroupName[i].caption = groupconfig[g].name
+    end
+
+    -- Groups and Config tab
     for g = 1, 4 do 
-        if currentShipGroup == g then
-            c_ord.lblGroupName.caption = groupconfig[g].name
-        end
         c_grp.groups.lblName[g].caption = groupconfig[g].name
         c_conf.groups.lblName[g].caption = groupconfig[g].name
     end
@@ -746,7 +805,7 @@ function refreshGroupNames()
 end
 
 
-function refreshGroupsUI()
+function refreshGroupsUIShips()
 
     c_grp.lstPool:clear()
     for i = 1, #shipgroups do
@@ -766,6 +825,26 @@ function refreshGroupsUI()
             c_grp.lstPool:addEntry(ship.name)
         end
     end
+    
+end
+
+
+function refreshGroupsUIButtons(force)
+
+    -- en/disable ship assignment buttons according to list selections
+    
+    if force or c_grp.lstPool.selected ~= shipPoolLastIndex then
+        shipPoolLastIndex = c_grp.lstPool.selected
+        for i = 1, 4 do
+            c_grp.groups.btnAssign[i].active = (shipPoolLastIndex >= 0) and (c_grp.groups.lstShips[i].rows < groupshiplimit)
+        end     
+    end
+    for i = 1, 4 do 
+        if force or c_grp.groups.lstShips[i].selected ~= groupListsLastIndices[i] then
+            groupListsLastIndices[i] = c_grp.groups.lstShips[i].selected
+            c_grp.groups.btnUnassign[i].active = (groupListsLastIndices[i] >= 0)
+        end
+    end
 
 end
 
@@ -774,20 +853,7 @@ function updateUI()
 
     if selectedtabidx == tabs.groups.index then
 
-        -- GROUPS
-        -- en/disable ship assignment buttons according to list selections
-        if c_grp.lstPool.selected ~= shipPoolLastIndex then
-            shipPoolLastIndex = c_grp.lstPool.selected
-            for i = 1, 4 do
-                c_grp.groups.btnAssign[i].active = (shipPoolLastIndex >= 0)
-            end     
-        end
-        for i = 1, 4 do 
-            if c_grp.groups.lstShips[i].selected ~= groupListsLastIndices[i] then
-                groupListsLastIndices[i] = c_grp.groups.lstShips[i].selected
-                c_grp.groups.btnUnassign[i].active = (groupListsLastIndices[i] >= 0)
-            end
-        end
+        refreshGroupsUIButtons()
 
     elseif selectedtabidx == tabs.config.index then
 
@@ -834,6 +900,26 @@ function updateClient(timeStep)
 end
 
 
+function orderGroupsIter()
+    local i = 0
+    local lb = ((currentPage * ordergroupslimit) - ordergroupslimit + 1)
+    local ub = (currentPage * ordergroupslimit)
+    local curr = 0
+
+    return function() 
+                i = i + 1
+                if curr == 0 then
+                    curr = lb
+                elseif curr < ub then
+                    curr = curr + 1 
+                else    
+                    return                 
+                end
+                return i, curr
+           end 
+end
+
+
 function syncShipInfos(data)
 
     if onServer() then
@@ -845,7 +931,7 @@ function syncShipInfos(data)
 
     -- update infos in UI
     if uivisible then
-        refreshShipsUI()
+        refreshOrdersUI()
     end
 
 end
