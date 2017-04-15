@@ -24,7 +24,6 @@ local modInfo = {
 
 -- config
 local configdefaults = {
-    updatedelay = 750,
     debugoutput = false
 }
 local configprefix = "fleetcontrol_"
@@ -47,8 +46,8 @@ local ordersInfo = {
 }
 
 
-function getConfig(scope)
-    return CachedConfig(configprefix, configdefaults, scope)
+function getConfig(scope, defaults)
+    return CachedConfig(configprefix, defaults, scope)
 end
 
 

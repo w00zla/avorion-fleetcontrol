@@ -8,6 +8,10 @@ desc: configuration util for fleetcontrol mod (with cached values)
 
 ]]--
 
+package.path = package.path .. ";data/scripts/lib/?.lua"
+
+json = require("fleetcontrol.json")
+
 
 local CachedConfig = {
     _scope = "server",
@@ -73,9 +77,12 @@ local function loadValue(config, scope, index, prefix, defaults)
 
     -- load value from target's storage 
     local val = target:getValue(storagekey)
-    
-    -- use existing default value if present
-    if not val and defaults then
+       
+    if val then      
+        -- parse JSON string for LUA variables
+        val = json.parse(val)
+    elseif defaults then
+        -- use existing default value if present
         val = defaults[config]
     end
     return val
@@ -86,6 +93,15 @@ end
 local function saveValue(scope, index, prefix, config, value)
 
     local storagekey = prefix .. config
+
+    local vt = type(value)
+    if vt == "function" or vt == "userdata" or vt == "thread" then 
+        error(string.format("Type '%s' is not supported", vt))
+    end
+
+    if value then 
+        value = json.stringify(value)
+    end
 
     -- save value to target storage via server-side call (required!)
     CachedConfig_CommitSave(scope, index, storagekey, value)
@@ -129,11 +145,9 @@ end
 -- wrap the assignment of property values
 CachedConfig.__newindex = function(t, k, v)  
     local value = rawget(t, "_c_"..k)
-    if (v ~= value) then
-        -- save value to storage and update cached result in table 
-        saveValue(rawget(t, "_scope"), rawget(t, "_index"), rawget(t, "_prefix"), k, v)
-        rawset(t, "_c_"..k, v) 
-    end
+    -- save value to storage and update cached result in table 
+    saveValue(rawget(t, "_scope"), rawget(t, "_index"), rawget(t, "_prefix"), k, v)
+    rawset(t, "_c_"..k, v) 
 end
 
 

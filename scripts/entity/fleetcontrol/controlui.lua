@@ -14,10 +14,38 @@ require "utility"
 require "stringutility"
 
 require "fleetcontrol.common"
-json = require("fleetcontrol.json")
 
+-- Config
 
--- client / UI vars
+local configdefaults = {
+    updatedelay = 750,
+    debugoutput = false,
+    groupconfig = {
+            {
+                name="Group 1",
+                showhud=false,
+                hudcolor={a=0.5,r=1,g=1,b=1}
+            },
+            {
+                name="Group 2",
+                showhud=false,
+                hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
+            },
+            {
+                name="Group 3",
+                showhud=false,
+                hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
+            },
+            {
+                name="Group 4",
+                showhud=false,
+                hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
+            }    
+        },
+    shipgroups = { {},{},{},{} }
+}
+
+-- UI vars
 
 local mywindow
 local tabs = {
@@ -68,23 +96,29 @@ local c_conf = {
     }
 }
 
-local groupconfig
-local shipgroups
-local shipinfos
-local allships
-
-local config
-local ordersInfo
-
+-- limits
 local ordergroupslimit = 2
 local groupshiplimit = 6
 local groupnamelimit = 18
+
+-- configs
+local config
+local ordersInfo
+local groupconfig
+local shipgroups
+
+-- runtime data
+local shipinfos -- server&client
+local allships
+
+-- widget indices
 local shipPoolLastIndex
 local configCatsLastIndex
 local groupListsLastIndices = {}
 local currentPage = 1
-
 local selectedtabidx
+
+-- runtime flags and timestamps
 local uivisible = false
 local doupdatestates = false
 local laststateupdate = 0
@@ -99,51 +133,13 @@ function initialize()
 
     -- TODO: load some configs from server (i.e. updatedelay)
 
-    config = getConfig("player")
+    -- load config and dynamic data
+    config = getConfig("player", configdefaults)
     ordersInfo = getOrdersInfo()
 
-    -- TODO: integrate json serialization into config class
-
+    -- init runtime configs
     groupconfig = config.groupconfig
-    if groupconfig then
-        groupconfig = json.parse(groupconfig)
-    else
-        groupconfig = {
-            {
-                name="Group 1",
-                showhud=false,
-                hudcolor={a=0.5,r=1,g=1,b=1}
-            },
-            {
-                name="Group 2",
-                showhud=false,
-                hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
-            },
-            {
-                name="123456789012345678",
-                showhud=false,
-                hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
-            },
-            {
-                name="999998888899999",
-                showhud=false,
-                hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
-            }    
-        }
-    end
-
     shipgroups = config.shipgroups
-    if shipgroups then
-        shipgroups = json.parse(shipgroups)
-    else
-        shipgroups = { {},{},{},{} }
-        -- shipgroups = {
-        --     { "Craft", "Craft 1", "Craft 2" },
-        --     { "Craft 3" },
-        --     {},
-        --     {}
-        -- }
-    end
 
 end
 
@@ -676,8 +672,7 @@ function onAssignShipGroupPressed(sender)
 		if btn.index == sender.index then
             -- update config data
             table.insert(shipgroups[i], shipname)
-            local strval = json.stringify(shipgroups)
-            config.shipgroups = strval
+            config.shipgroups = shipgroups
 
             -- update list widgets
             c_grp.groups.lstShips[i]:addEntry(shipname)
@@ -698,7 +693,7 @@ function onUnassignShipGroupPressed(sender)
 		if btn.index == sender.index then
             -- update config data
             table.remove(shipgroups[i], c_grp.groups.lstShips[i].selected + 1)
-            config.shipgroups = json.stringify(shipgroups)
+            config.shipgroups = shipgroups
 
             -- update list widgets
             local shipname = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)       
