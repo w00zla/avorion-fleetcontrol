@@ -51,6 +51,8 @@ local c_grp = {
         lstShips = {},
         btnAssign = {},
         btnUnassign = {},
+        btnMoveUp = {},
+        btnMoveDown = {},
         lblGroupInfo = {}
     }
 }
@@ -405,8 +407,13 @@ function buildGroupsUI(parent)
         local xl, yl = split_grp3.right.lower.x, split_grp3.right.lower.y
         local xu, yu = split_grp3.right.upper.x, split_grp3.right.upper.y
 
-        local shipassign = parent:createButton(Rect(xl, yl, xl + 30, yl + 30), "+", "onAssignShipGroupPressed")           
-        local shipunassign = parent:createButton(Rect(xl, yl + 35, xl + 30, yl + 65), "-", "onUnassignShipGroupPressed")     
+        local shipassign = parent:createButton(Rect(xl, yl + 10, xl + 30, yl + 40), "+", "onAssignShipGroupPressed")           
+        local shipunassign = parent:createButton(Rect(xl, yl + 50, xl + 30, yl + 80), "-", "onUnassignShipGroupPressed")   
+
+        local moveshipup = parent:createButton(Rect(xl, yu - 90, xl + 25, yu - 65), "", "onGroupShipUpPressed")
+        moveshipup.icon = "data/textures/icons/flatarrowup.png"
+        local moveshipdown = parent:createButton(Rect(xl, yu - 55, xl + 25, yu - 30), "", "onGroupShipDownPressed") 
+        moveshipdown.icon = "data/textures/icons/flatarrowdown.png"
 
         local split_grp4 = UIHorizontalSplitter(split_grp3.left, 0, 0, 0.5)
         split_grp4.bottomSize = 20
@@ -422,11 +429,15 @@ function buildGroupsUI(parent)
         shipunassign.textSize = 18  
         shipassign.active = false
         shipunassign.active = false
+        moveshipup.active = false
+        moveshipdown.active = false
 
         c_grp.groups.lblName[i] = grplbl
         c_grp.groups.lstShips[i] = shiplist
         c_grp.groups.btnAssign[i] = shipassign
         c_grp.groups.btnUnassign[i] = shipunassign
+        c_grp.groups.btnMoveUp[i] = moveshipup
+        c_grp.groups.btnMoveDown[i] = moveshipdown
         c_grp.groups.lblGroupInfo[i] = grpinfo
         
     end  
@@ -703,10 +714,35 @@ function onUnassignShipGroupPressed(sender)
 end
 
 
-function onRenameGroupPressed(sender)
+function onGroupShipUpPressed(sender)
+
+    for i, btn in pairs(c_grp.groups.btnMoveUp) do
+		if btn.index == sender.index then
+            -- update config data
+            -- table.remove(shipgroups[i], c_grp.groups.lstShips[i].selected + 1)
+            -- config.shipgroups = json.stringify(shipgroups)
+
+            -- -- update list widgets
+            -- local shipname = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)       
+            -- c_grp.lstPool:addEntry(shipname)
+            -- c_grp.groups.lstShips[i]:removeEntry(c_grp.groups.lstShips[i].selected)
+            -- break
+		end
+	end
+
+    refreshGroupsUIButtons(true)
 
 end
 
+
+function onGroupShipDownPressed(sender)
+
+end
+
+
+function onRenameGroupPressed(sender)
+
+end
 
 function onGroupHudChecked(sender)
 
