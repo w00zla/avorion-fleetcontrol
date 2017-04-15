@@ -109,7 +109,7 @@ local shipgroups
 
 -- runtime data
 local shipinfos -- server&client
-local allships
+local knownships = {}
 
 -- widget indices
 local shipPoolLastIndex
@@ -146,14 +146,15 @@ end
 
 function secure()
 
-    return shipinfos
+    return shipinfos, knownships
 
 end
 
 
-function restore(data)
+function restore(data1, data2)
 
-    shipinfos = data
+    shipinfos = data1
+    knownships = data2 or {}
 
 end
 
@@ -356,9 +357,9 @@ function buildGroupsUI(parent)
 
     -- ships pool list
     local split_sp = UIHorizontalSplitter(split1.left, 10, 0, 0.5)
-    split_sp.topSize = 30
+    split_sp.topSize = 20
 
-    local cappool = parent:createLabel(vec2(split_sp.top.lower.x, split_sp.top.lower.y), "Unassigned captained\nships in sector:", 12)
+    local cappool = parent:createLabel(vec2(split_sp.top.lower.x, split_sp.top.lower.y + 4), "Unassigned ships:", 13)
     c_grp.lstPool = parent:createListBox(split_sp.bottom)
 
     parent:createLine(vec2(split1.left.upper.x + 15, split1.left.lower.y), vec2(split1.left.upper.x + 15, split1.left.upper.y))
@@ -635,7 +636,7 @@ function onGroupOrderSelected(sender)
 
     -- issue orders to all group ships excluding player driven ships
     for i, info in pairs(shipinfos[grp]) do
-        if info.index ~= pshipIndex then
+        if info.index ~= pshipIndex and info.hascaptain then
             indices[i] = info.index
         end
 	end
@@ -653,7 +654,6 @@ function onShipOrderSelected(sender)
         for s, cmd in pairs(c_ord.ships.cmdOrder[i]) do
             if cmd.index == sender.index then
                 if cmd.selectedIndex < 1 then return end
-
                 local indices = {shipinfos[g][s].index}	
                 invokeOrdersScript(indices, ordersInfo[cmd.selectedIndex])
                 break
@@ -673,7 +673,6 @@ function onAssignShipGroupPressed(sender)
             -- update config data
             table.insert(shipgroups[i], shipname)
             config.shipgroups = shipgroups
-
             -- update list widgets
             c_grp.groups.lstShips[i]:addEntry(shipname)
             c_grp.lstPool:removeEntry(c_grp.lstPool.selected)
@@ -694,7 +693,6 @@ function onUnassignShipGroupPressed(sender)
             -- update config data
             table.remove(shipgroups[i], c_grp.groups.lstShips[i].selected + 1)
             config.shipgroups = shipgroups
-
             -- update list widgets
             local shipname = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)       
             c_grp.lstPool:addEntry(shipname)
@@ -713,15 +711,22 @@ function onGroupShipUpPressed(sender)
 
     for i, btn in pairs(c_grp.groups.btnMoveUp) do
 		if btn.index == sender.index then
-            -- update config data
-            -- table.remove(shipgroups[i], c_grp.groups.lstShips[i].selected + 1)
-            -- config.shipgroups = json.stringify(shipgroups)
-
-            -- -- update list widgets
-            -- local shipname = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)       
-            -- c_grp.lstPool:addEntry(shipname)
-            -- c_grp.groups.lstShips[i]:removeEntry(c_grp.groups.lstShips[i].selected)
-            -- break
+            local selidx = c_grp.groups.lstShips[i].selected + 1
+            if selidx > 1 then
+                -- swap table elements & update config data
+                local s1, s2 = shipgroups[i][selidx], shipgroups[i][selidx-1]
+                shipgroups[i][selidx-1] = s1
+                shipgroups[i][selidx] = s2
+                config.shipgroups = shipgroups
+                -- update list widgets
+                local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected-1)
+                c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected-1, s1, bold, italic, color)
+                local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)
+                c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected, s2, bold, italic, color) 
+                -- select moved list entry 
+                c_grp.groups.lstShips[i]:select(c_grp.groups.lstShips[i].selected-1)         
+            end
+            break
 		end
 	end
 
@@ -731,6 +736,29 @@ end
 
 
 function onGroupShipDownPressed(sender)
+
+    for i, btn in pairs(c_grp.groups.btnMoveDown) do
+		if btn.index == sender.index then
+            local selidx = c_grp.groups.lstShips[i].selected + 1
+            if selidx < c_grp.groups.lstShips[i].rows then
+                -- swap table elements & update config data
+                local s1, s2 = shipgroups[i][selidx], shipgroups[i][selidx+1]
+                shipgroups[i][selidx+1] = s1
+                shipgroups[i][selidx] = s2
+                config.shipgroups = shipgroups
+                -- update list widgets
+                local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected+1)
+                c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected+1, s1, bold, italic, color)
+                local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)
+                c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected, s2, bold, italic, color) 
+                -- select moved list entry 
+                c_grp.groups.lstShips[i]:select(c_grp.groups.lstShips[i].selected+1)         
+            end
+            break
+		end
+	end
+
+    refreshGroupsUIButtons(true)
 
 end
 
@@ -752,12 +780,16 @@ function displayShipState(g, s, ship, currloc)
     c_ord.ships.lblName[g][s].caption = ship.name
     c_ord.ships.lblName[g][s]:show()
 
+    -- TODO: colors for states =)
     if ship.isplayer then
         c_ord.ships.lblState[g][s].caption = "Player"
+    elseif not ship.hascaptain then
+        c_ord.ships.lblState[g][s].caption = "No Captain"
     else
         c_ord.ships.lblState[g][s].caption = ship.aistate or "-"
     end
     c_ord.ships.lblState[g][s].bold = ship.isplayer or false
+    --c_ord.ships.lblState[g][s].italic = (not ship.hascaptain)
     c_ord.ships.lblState[g][s]:show()
 
     -- location/sector of ship
@@ -774,31 +806,33 @@ function displayShipState(g, s, ship, currloc)
         c_ord.ships.btnLook[g][s]:show() 
     end
    
-    if ship.order then
-        if ship.elsewhere or ship.isplayer then
-            -- disable orders combobox if ship is controlled by player or elsewhere
-            c_ord.ships.lblOrder[g][s].caption = "-"
-            for i, oi in pairs(ordersInfo) do 
-                if oi.order == ship.order then
-                    c_ord.ships.lblOrder[g][s].caption = oi.text
-                    break
+    if ship.hascaptain then
+        if ship.order then
+            if ship.elsewhere or ship.isplayer then
+                -- disable orders combobox if ship is controlled by player or elsewhere
+                c_ord.ships.lblOrder[g][s].caption = "-"
+                for i, oi in pairs(ordersInfo) do 
+                    if oi.order == ship.order then
+                        c_ord.ships.lblOrder[g][s].caption = oi.text
+                        break
+                    end
                 end
-            end
-            c_ord.ships.lblOrder[g][s]:show()
-        else
-            -- set selected order to ship's current order
-            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)    
-            for i, oi in pairs(ordersInfo) do 
-                if oi.order == ship.order then
-                    c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
-                    break
+                c_ord.ships.lblOrder[g][s]:show()
+            else
+                -- set selected order to ship's current order
+                c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)    
+                for i, oi in pairs(ordersInfo) do 
+                    if oi.order == ship.order then
+                        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
+                        break
+                    end
                 end
+                c_ord.ships.cmdOrder[g][s]:show()
             end
+        elseif not ship.isplayer then
+            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
             c_ord.ships.cmdOrder[g][s]:show()
         end
-    elseif not ship.isplayer then
-        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
-        c_ord.ships.cmdOrder[g][s]:show()
     end
 
     -- make rest of ship related widgets visible
@@ -899,22 +933,27 @@ end
 
 function refreshGroupsUIShips()
 
-    c_grp.lstPool:clear()
-    for i = 1, #shipgroups do
+    -- fill group lists with assigned ships
+    for i = 1, 4 do
         c_grp.groups.lstShips[i]:clear()
+        for _, shipname in pairs(shipgroups[i]) do
+            c_grp.groups.lstShips[i]:addEntry(shipname)
+        end
     end
 
-    for _, ship in pairs(allships) do 
+    -- fill pool list with rest
+    -- TODO: sort alphabetically
+    c_grp.lstPool:clear()
+    for _, ship in pairs(knownships) do 
         local assigned = false
         for i, shipgrp in pairs(shipgroups) do 
-            if tablecontains(shipgrp, ship.name) then
-                c_grp.groups.lstShips[i]:addEntry(ship.name)
+            if table.contains(shipgrp, ship) then
                 assigned = true
                 break
             end      
         end
         if not assigned then
-            c_grp.lstPool:addEntry(ship.name)
+            c_grp.lstPool:addEntry(ship)
         end
     end
     
@@ -923,18 +962,17 @@ end
 
 function refreshGroupsUIButtons(force)
 
-    -- en/disable ship assignment buttons according to list selections
-    
-    if force or c_grp.lstPool.selected ~= shipPoolLastIndex then
-        shipPoolLastIndex = c_grp.lstPool.selected
-        for i = 1, 4 do
-            c_grp.groups.btnAssign[i].active = (shipPoolLastIndex >= 0) and (c_grp.groups.lstShips[i].rows < groupshiplimit)
-        end     
-    end
     for i = 1, 4 do 
+        -- en/disable ship assignment buttons according to list selections 
+        if force or c_grp.lstPool.selected ~= shipPoolLastIndex then
+            shipPoolLastIndex = c_grp.lstPool.selected
+            c_grp.groups.btnAssign[i].active = (shipPoolLastIndex >= 0) and (c_grp.groups.lstShips[i].rows < groupshiplimit)
+        end
         if force or c_grp.groups.lstShips[i].selected ~= groupListsLastIndices[i] then
             groupListsLastIndices[i] = c_grp.groups.lstShips[i].selected
             c_grp.groups.btnUnassign[i].active = (groupListsLastIndices[i] >= 0)
+            c_grp.groups.btnMoveUp[i].active = (groupListsLastIndices[i] > 0)
+            c_grp.groups.btnMoveDown[i].active = (groupListsLastIndices[i] >= 0 and groupListsLastIndices[i] < (c_grp.groups.lstShips[i].rows-1))
         end
     end
 
@@ -975,13 +1013,20 @@ function updateClient(timeStep)
         -- only do update if configured delay has passed
         if (current - laststateupdate) >= config.updatedelay then
 
-            -- get all exisiting ships (with captains) of player in current sector
-            allships = getPlayerCaptainedCrafts()
+            -- get all exisiting ships of player in current sector
+            local sectorships = getPlayerCrafts()
 
-            -- TODO: sort allships alphabetically
+            -- TODO: add new ship scripts here!!
+
+            -- add new ships to known ones
+            for _, ship in pairs(sectorships) do 
+                if not table.contains(knownships, ship.name) then
+                    table.insert(knownships, ship.name)
+                end
+            end
 
             -- update ship states and refresh ships UI widgets
-            updateShipStates(shipgroups, allships)
+            updateShipStates(shipgroups, sectorships)
 
             laststateupdate = current
             ordersbusy = false
@@ -990,7 +1035,6 @@ function updateClient(timeStep)
     end
 
 end
-
 
 
 function syncShipInfos(data)
@@ -1012,10 +1056,10 @@ end
 
 -- SERVER-SIDE FUNCTIONS
 
-function updateShipStates(groups, allships)
+function updateShipStates(groups, ships)
 
     if onClient() then
-        invokeServerFunction("updateShipStates", groups, allships)
+        invokeServerFunction("updateShipStates", groups, ships)
         return
     end
 
@@ -1034,8 +1078,8 @@ function updateShipStates(groups, allships)
     local pshipIndex = Player(callingPlayer).craftIndex
 
     -- compare existing ships in sector and get their states 
-    for _, ship in pairs(allships) do 
-        if tablecontains(updateships, ship.name) then
+    for _, ship in pairs(ships) do 
+        if table.contains(updateships, ship.name) then
             local entity = Entity(ship.index)
             if entity and entity.isShip and entity.name == ship.name then
                 -- TODO: check also if ship is controlled by another player
@@ -1046,13 +1090,18 @@ function updateShipStates(groups, allships)
                         isplayer = true
                     })
                 else
-                    local aistate, order = getShipAIOrderState(entity)
+                    local hascaptain = checkShipCaptain(entity)
+                    local aistate, order
+                    if hascaptain then
+                        aistate, order = getShipAIOrderState(entity) 
+                    end
                     table.insert(statedata, {
                         name = entity.name,
                         index = entity.index,
                         aistate = aistate,
                         order = order,
-                        location = coords
+                        location = coords,
+                        hascaptain = hascaptain
                     })
                 end
             end

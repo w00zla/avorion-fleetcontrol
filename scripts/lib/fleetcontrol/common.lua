@@ -126,7 +126,7 @@ function printsf(message, ...)
 end
 
 
-function tablecontains(table, value)
+function table.contains(table, value)
 
     for _, v in pairs(table) do
         if v == value then return true end
@@ -136,24 +136,24 @@ function tablecontains(table, value)
 end
 
 
-local function checkCaptain(entity)
+function checkShipCaptain(entity)
 
-    local captains = entity:getCrewMembers(CrewProfessionType.Captain)
-    if captains and captains > 0 then
-        return true
+    if entity.isShip then
+        local captains = entity:getCrewMembers(CrewProfessionType.Captain)
+        return (captains and captains > 0)
     end
-
+    
 end
 
 
-function getPlayerCaptainedCrafts()
+function getPlayerCrafts()
 
     local ships = {}
     local player = Player()
 
     local playerentities = {Sector():getEntitiesByFaction(player.index)}
     for _, e in pairs(playerentities) do
-        if e.isShip and checkCaptain(e) then
+        if e.isShip then
             table.insert(ships, { name=e.name, index=e.index })
         end
     end

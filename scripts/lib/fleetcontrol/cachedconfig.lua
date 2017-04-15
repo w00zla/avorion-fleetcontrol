@@ -78,9 +78,11 @@ local function loadValue(config, scope, index, prefix, defaults)
     -- load value from target's storage 
     local val = target:getValue(storagekey)
        
-    if val then      
-        -- parse JSON string for LUA variables
-        val = json.parse(val)
+    if val then    
+        if type(val) == "string" then
+            -- parse JSON string for LUA variables
+            val = json.parse(val)
+        end
     elseif defaults then
         -- use existing default value if present
         val = defaults[config]
