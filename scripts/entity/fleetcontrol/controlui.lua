@@ -30,6 +30,7 @@ local tabs = {
 local c_ord = {
     btnPrevPage = nil,
     btnNextPage = nil,
+    lblPageInfo = nil,
     lblGroupName = {},
     cmdGroupOrder = {},
     ships = {
@@ -49,7 +50,8 @@ local c_grp = {
         lblName = {},
         lstShips = {},
         btnAssign = {},
-        btnUnassign = {}
+        btnUnassign = {},
+        lblGroupInfo = {}
     }
 }
 
@@ -74,6 +76,7 @@ local ordersInfo
 
 local ordergroupslimit = 2
 local groupshiplimit = 6
+local groupnamelimit = 18
 local shipPoolLastIndex
 local configCatsLastIndex
 local groupListsLastIndices = {}
@@ -97,6 +100,8 @@ function initialize()
     config = getConfig("player")
     ordersInfo = getOrdersInfo()
 
+    -- TODO: integrate json serialization into config class
+
     groupconfig = config.groupconfig
     if groupconfig then
         groupconfig = json.parse(groupconfig)
@@ -113,12 +118,12 @@ function initialize()
                 hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
             },
             {
-                name="Group 3",
+                name="123456789012345678",
                 showhud=false,
                 hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
             },
             {
-                name="Group 4",
+                name="999998888899999",
                 showhud=false,
                 hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
             }    
@@ -167,10 +172,8 @@ end
 
 function onShowWindow()
 
+    -- pre-select orders tab everytime window is opened
     tabs.window:selectTab(tabs.orders)
-
-    -- show current groupnames in related widgets
-    refreshGroupNames()
 
     -- trigger updates of UI widgets
     uivisible = true   
@@ -190,7 +193,7 @@ end
 
 function initUI()
 
-    local size = vec2(800, 700)
+    local size = vec2(900, 700)
     local res = getResolution()
 
     -- create window
@@ -211,7 +214,7 @@ function initUI()
     tabs.groups = tabs.window:createTab("Groups", "data/textures/icons/fleetcontrol/shipgroups.png", "Fleet Groups")
     buildGroupsUI(tabs.groups)
 
-    tabs.config = tabs.window:createTab("Config", "data/textures/icons/gears.png", "Configuration")
+    tabs.config = tabs.window:createTab("Config", "data/textures/icons/spanner.png", "Configuration")
     buildConfigUI(tabs.config)
 
     scriptLog(nil, "client UI initialized successfully")
@@ -227,6 +230,10 @@ function buildOrdersUI(parent)
     c_ord.btnPrevPage = parent:createButton(Rect(10, size.y - 40, 60, size.y - 10), "<", "onPrevPagePressed")	
     c_ord.btnPrevPage.active = false
     c_ord.btnNextPage = parent:createButton(Rect(size.x - 60, size.y - 40, size.x - 10, size.y - 10), ">", "onNextPagePressed")	
+
+    c_ord.lblPageInfo = parent:createLabel(vec2((size.x/2) - 40, size.y - 30), "", 16)
+    c_ord.lblPageInfo.color = ColorRGB(0.2, 0.2, 0.2)
+
     
     local y_grp = 0
     for g = 1, ordergroupslimit do
@@ -239,6 +246,8 @@ function buildOrdersUI(parent)
 
         -- group widgets
         local groupname = parent:createLabel(vec2(xl, y_grp + 4), "", 17)
+        groupname.bold = true
+
         local cbox = parent:createComboBox(split_grp.right, "onGroupOrderSelected")
         cbox:addEntry("-")
         for _, btninfo in pairs(ordersInfo) do
@@ -345,13 +354,13 @@ function buildGroupsUI(parent)
     local size = parent.size
 
     local split1 = UIVerticalSplitter(Rect(10, 10, size.x - 10, size.y - 10), 30, 0, 0.5)
-    split1.rightSize = 530
+    split1.leftSize = 200
 
     -- ships pool list
     local split_sp = UIHorizontalSplitter(split1.left, 10, 0, 0.5)
     split_sp.topSize = 30
 
-    parent:createLabel(vec2(split_sp.top.lower.x, split_sp.top.lower.y), "Unassigend captained\nships in sector:", 12)
+    local cappool = parent:createLabel(vec2(split_sp.top.lower.x, split_sp.top.lower.y), "Unassigned captained\nships in sector:", 12)
     c_grp.lstPool = parent:createListBox(split_sp.bottom)
 
     parent:createLine(vec2(split1.left.upper.x + 15, split1.left.lower.y), vec2(split1.left.upper.x + 15, split1.left.upper.y))
@@ -380,18 +389,18 @@ function buildGroupsUI(parent)
         local split_grp1 = UIHorizontalSplitter(r_quarter, 10, 0, 0.5)
         split_grp1.topSize = 30
 
+        -- parent:createFrame(split_grp1.top)
+
         -- group labels
-        local split_grp2 = UIVerticalSplitter(split_grp1.top, 10, 0, 0.5)
+        local split_grp2 = UIVerticalSplitter(split_grp1.top, 8, 0, 0.5)
         split_grp2.leftSize = 20
 
-        local nrlbl = parent:createLabel(vec2(split_grp2.left.lower.x, split_grp2.left.lower.y + 8), string.format("#%i", i), 14)
-        c_grp.groups.lblName[i] = parent:createLabel(vec2(split_grp2.right.lower.x, split_grp2.right.lower.y + 6), string.format("Group#%i", i), 16)
+        local nrlbl = parent:createLabel(vec2(split_grp2.left.lower.x + 2, split_grp2.left.lower.y + 7), string.format("#%i", i), 12)
+        local grplbl = parent:createLabel(vec2(split_grp2.right.lower.x, split_grp2.right.lower.y + 3), string.format("Group#%i", i), 17)
 
         -- group ship list
         local split_grp3 = UIVerticalSplitter(split_grp1.bottom, 5, 0, 0.5)
         split_grp3.rightSize = 30
-
-        c_grp.groups.lstShips[i] = parent:createListBox(split_grp3.left)
 
         local xl, yl = split_grp3.right.lower.x, split_grp3.right.lower.y
         local xu, yu = split_grp3.right.upper.x, split_grp3.right.upper.y
@@ -399,14 +408,26 @@ function buildGroupsUI(parent)
         local shipassign = parent:createButton(Rect(xl, yl, xl + 30, yl + 30), "+", "onAssignShipGroupPressed")           
         local shipunassign = parent:createButton(Rect(xl, yl + 35, xl + 30, yl + 65), "-", "onUnassignShipGroupPressed")     
 
-        nrlbl.color = ColorARGB(0.5, 0.2, 0.2, 0.2)
+        local split_grp4 = UIHorizontalSplitter(split_grp3.left, 0, 0, 0.5)
+        split_grp4.bottomSize = 20
+
+        local shiplist = parent:createListBox(split_grp4.top)
+        local grpinfo = parent:createLabel(vec2(split_grp4.bottom.lower.x + (split_grp4.bottom.size.x/2) - 25, split_grp4.bottom.lower.y + 5), "", 12)
+
+        grplbl.bold = true
+        cappool.color = ColorARGB(0.5, 0, 0.3, 1)   
+        nrlbl.color = ColorARGB(0.5, 0.2, 0.2, 0.2)     
+        grpinfo.color = ColorARGB(0.5, 0.2, 0.2, 0.2)
         shipassign.textSize = 18  
         shipunassign.textSize = 18  
         shipassign.active = false
         shipunassign.active = false
 
+        c_grp.groups.lblName[i] = grplbl
+        c_grp.groups.lstShips[i] = shiplist
         c_grp.groups.btnAssign[i] = shipassign
         c_grp.groups.btnUnassign[i] = shipunassign
+        c_grp.groups.lblGroupInfo[i] = grpinfo
         
     end  
 
@@ -433,13 +454,15 @@ function buildConfigUI(parent)
     local size = parent.size
 
     local split1 = UIVerticalSplitter(Rect(10, 10, size.x - 10, size.y - 10), 30, 0, 0.5)
-    split1.rightSize = 580
+    split1.leftSize = 150
 
     local split2 = UIHorizontalSplitter(split1.left, 10, 0, 0.5)
     split2.topSize = 20
 
-    parent:createLabel(vec2(split2.top.lower.x, split2.top.lower.y), "Categories:", 12)
     -- option categories list
+    local catlbl = parent:createLabel(vec2(split2.top.lower.x, split2.top.lower.y + 4), "Categories:", 12)
+    catlbl.color = ColorARGB(0.5, 0.8, 0.4, 0.2)  
+    catlbl.italic = true
     c_conf.lstCategories = parent:createListBox(split2.bottom)
 
     -- GROUPS options
@@ -449,7 +472,8 @@ function buildConfigUI(parent)
 
     local rs = c_conf.cntCatGroups.size
 
-    c_conf.cntCatGroups:createLabel(vec2(0, 0), "Groups Options", 16)
+    local catgrp = c_conf.cntCatGroups:createLabel(vec2(0, 0), "Groups Options", 16)
+    -- catgrp.bold = true
     c_conf.cntCatGroups:createLine(vec2(0, 30), vec2(rs.x, 30))
 
     local sgrp1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 3)
@@ -510,9 +534,18 @@ function onTabSelected()
 
     selectedtabidx = tabs.window:getActiveTab().index
 
-    if tabs.groups and tabs.groups.index == selectedtabidx then
+    if tabs.orders and tabs.orders.index == selectedtabidx then
+
+        -- update groupnames and shown groups in related widgets
+        refreshGroupNames()
+        refreshPageInfo()
+        
+    elseif tabs.groups and tabs.groups.index == selectedtabidx then
+
         -- update groups tab widgets
         refreshGroupsUIShips()
+        refreshGroupsInfo()
+
     end
 
 end
@@ -524,6 +557,7 @@ function onPrevPagePressed()
     laststateupdate = 0
 
     refreshGroupNames()
+    refreshPageInfo()
 
     if currentPage == 1 then
         c_ord.btnPrevPage.active = false
@@ -539,6 +573,7 @@ function onNextPagePressed()
     laststateupdate = 0
 
     refreshGroupNames()
+    refreshPageInfo()
 
     if currentPage == 2 then
         c_ord.btnNextPage.active = false
@@ -641,6 +676,7 @@ function onAssignShipGroupPressed(sender)
 	end
 
     refreshGroupsUIButtons(true)
+    refreshGroupsInfo()
 
 end
 
@@ -662,6 +698,7 @@ function onUnassignShipGroupPressed(sender)
 	end
 
     refreshGroupsUIButtons(true)
+    refreshGroupsInfo()
 
 end
 
@@ -805,6 +842,30 @@ function refreshGroupNames()
 end
 
 
+function refreshPageInfo()
+
+    local lb = ((currentPage * ordergroupslimit) - ordergroupslimit + 1)
+    local ub = (currentPage * ordergroupslimit) 
+    c_ord.lblPageInfo.caption = string.format("#%i - #%i", lb, ub)
+
+end
+
+
+function refreshGroupsInfo()
+
+    for g = 1, 4 do
+        local cur, max = c_grp.groups.lstShips[g].rows, groupshiplimit
+        c_grp.groups.lblGroupInfo[g].caption = string.format("%i / %i", cur, max)
+        if cur < max then
+            c_grp.groups.lblGroupInfo[g].color = ColorARGB(0.5, 0, 1, 0)
+        else
+            c_grp.groups.lblGroupInfo[g].color = ColorARGB(0.5, 1, 0, 0)
+        end
+    end
+
+end
+
+
 function refreshGroupsUIShips()
 
     c_grp.lstPool:clear()
@@ -899,25 +960,6 @@ function updateClient(timeStep)
 
 end
 
-
-function orderGroupsIter()
-    local i = 0
-    local lb = ((currentPage * ordergroupslimit) - ordergroupslimit + 1)
-    local ub = (currentPage * ordergroupslimit)
-    local curr = 0
-
-    return function() 
-                i = i + 1
-                if curr == 0 then
-                    curr = lb
-                elseif curr < ub then
-                    curr = curr + 1 
-                else    
-                    return                 
-                end
-                return i, curr
-           end 
-end
 
 
 function syncShipInfos(data)
@@ -1060,14 +1102,37 @@ function invokeOrdersScript(shipindices, orderinfo)
 end
 
 
-function requestShipInfoSync()
+-- function requestShipInfoSync()
 
-    if onClient() then
-        invokeServerFunction("requestShipInfoSync")
-        return
-    end
+--     if onClient() then
+--         invokeServerFunction("requestShipInfoSync")
+--         return
+--     end
 
-    debugLog("shipinfo sync requested")
-    invokeClientFunction(Player(callingPlayer), "syncShipInfos", shipinfos)
+--     debugLog("shipinfo sync requested")
+--     invokeClientFunction(Player(callingPlayer), "syncShipInfos", shipinfos)
 
+-- end
+
+
+
+-- UTILITY FUNCTIONS
+
+function orderGroupsIter()
+    local i = 0
+    local lb = ((currentPage * ordergroupslimit) - ordergroupslimit + 1)
+    local ub = (currentPage * ordergroupslimit)
+    local curr = 0
+
+    return function() 
+                i = i + 1
+                if curr == 0 then
+                    curr = lb
+                elseif curr < ub then
+                    curr = curr + 1 
+                else    
+                    return                 
+                end
+                return i, curr
+           end 
 end
