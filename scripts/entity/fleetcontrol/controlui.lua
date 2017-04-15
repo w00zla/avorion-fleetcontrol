@@ -308,6 +308,7 @@ function buildOrdersUI(parent)
 
             local lookat = parent:createButton(split2.left, "", "onLookAtPressed")
             lookat.icon = "data/textures/icons/look-at.png"
+            lookat.tooltip = "Look at ship or map"
 
             if s == 01 then
                 local cap4 = parent:createLabel(vec2(split2.right.lower.x, y_grp + 35), "Order", 15)
@@ -617,6 +618,8 @@ end
 
 function onGroupOrderSelected(sender)
 
+    -- TODO: prevent re-selection of current order
+
     local cbox, grp
     for i, g in orderGroupsIter() do
         if sender.index == c_ord.cmdGroupOrder[i].index then
@@ -649,6 +652,8 @@ function onShipOrderSelected(sender)
 
     if ordersbusy then return end
     ordersbusy = true
+
+    -- TODO: prevent re-selection of current order
 
     for i, g in orderGroupsIter() do
         for s, cmd in pairs(c_ord.ships.cmdOrder[i]) do
@@ -962,12 +967,15 @@ end
 
 function refreshGroupsUIButtons(force)
 
-    for i = 1, 4 do 
-        -- en/disable ship assignment buttons according to list selections 
-        if force or c_grp.lstPool.selected ~= shipPoolLastIndex then
-            shipPoolLastIndex = c_grp.lstPool.selected
+    -- en/disable ship assignment buttons according to list selections 
+    if force or c_grp.lstPool.selected ~= shipPoolLastIndex then
+        shipPoolLastIndex = c_grp.lstPool.selected
+        for i = 1, 4 do 
             c_grp.groups.btnAssign[i].active = (shipPoolLastIndex >= 0) and (c_grp.groups.lstShips[i].rows < groupshiplimit)
         end
+    end
+    for i = 1, 4 do 
+        
         if force or c_grp.groups.lstShips[i].selected ~= groupListsLastIndices[i] then
             groupListsLastIndices[i] = c_grp.groups.lstShips[i].selected
             c_grp.groups.btnUnassign[i].active = (groupListsLastIndices[i] >= 0)
