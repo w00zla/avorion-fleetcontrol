@@ -405,13 +405,17 @@ function buildGroupsUI(parent)
         local xl, yl = split_grp3.right.lower.x, split_grp3.right.lower.y
         local xu, yu = split_grp3.right.upper.x, split_grp3.right.upper.y
 
-        local shipassign = parent:createButton(Rect(xl, yl + 10, xl + 30, yl + 40), "+", "onAssignShipGroupPressed")           
+        local shipassign = parent:createButton(Rect(xl, yl + 10, xl + 30, yl + 40), "+", "onAssignShipGroupPressed")   
+        shipassign.tooltip = "Assign ship to group"        
         local shipunassign = parent:createButton(Rect(xl, yl + 50, xl + 30, yl + 80), "-", "onUnassignShipGroupPressed")   
+        shipunassign.tooltip = "Unassign ship from group"
 
         local moveshipup = parent:createButton(Rect(xl, yu - 90, xl + 25, yu - 65), "", "onGroupShipUpPressed")
         moveshipup.icon = "data/textures/icons/flatarrowup.png"
+        moveshipup.tooltip = "Move ship up in list"
         local moveshipdown = parent:createButton(Rect(xl, yu - 55, xl + 25, yu - 30), "", "onGroupShipDownPressed") 
         moveshipdown.icon = "data/textures/icons/flatarrowdown.png"
+        moveshipdown.tooltip = "Move ship down in list"
 
         local split_grp4 = UIHorizontalSplitter(split_grp3.left, 0, 0, 0.5)
         split_grp4.bottomSize = 20
