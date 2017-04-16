@@ -48,6 +48,23 @@ local configdefaults = {
 -- UI vars
 
 local mywindow
+local textdialog = {
+    window = nil,
+    param = nil,
+    callback = nil,
+    textbox = nil
+}
+local colordialog = {
+    window = nil,
+    param = nil,
+    callback = nil,
+    color = nil,
+    colorpreview = nil,
+    sliderA = nil,
+    sliderR = nil,
+    sliderG = nil,
+    sliderB = nil
+}
 local tabs = {
     window = nil,
     orders = nil,
@@ -92,7 +109,9 @@ local c_conf = {
     groups = {
         lblName = {},
         btnRename = {},
-        chkShowHud = {}
+        chkShowHud = {},
+        picHudColorPrev = {},
+        btnHudColorPick = {}
     }
 }
 
@@ -207,6 +226,8 @@ function initUI()
     tabs.window = mywindow:createTabbedWindow(Rect(vec2(10, 10), size - 10))
     tabs.window.onSelectedFunction = "onTabSelected"
 
+    -- build tabs
+
     tabs.orders = tabs.window:createTab("Orders", "data/textures/icons/fleetcontrol/commander.png", "Fleet Orders")
     buildOrdersUI(tabs.orders)
 
@@ -215,6 +236,11 @@ function initUI()
 
     tabs.config = tabs.window:createTab("Config", "data/textures/icons/spanner.png", "Configuration")
     buildConfigUI(tabs.config)
+
+    -- build dialogs
+
+    buildTextDialog(menu, res)
+    buildColorDialog(menu, res)
 
     scriptLog(nil, "client UI initialized successfully")
     
@@ -463,7 +489,6 @@ function buildConfigUI(parent)
     -- "Integration" category for options regarding other mods
 
 
-
     local size = parent.size
 
     local split1 = UIVerticalSplitter(Rect(10, 10, size.x - 10, size.y - 10), 30, 0, 0.5)
@@ -497,31 +522,41 @@ function buildConfigUI(parent)
         local frm = c_conf.cntCatGroups:createFrame(r)
         frm.backgroundColor = ColorARGB(0.2, 0, 0, 0)
 
-        local sgrp2 = UIHorizontalSplitter(r, 10, 10, 0.5)
+        local sgrp2 = UIHorizontalSplitter(r, 15, 10, 0.5)
+        sgrp2.topSize = 40
+
+        local frm = c_conf.cntCatGroups:createFrame(sgrp2.top)
+        frm.backgroundColor = ColorARGB(0.35, 0, 0, 0)
 
         local xl, yl = sgrp2.top.lower.x, sgrp2.top.lower.y
         local xu, yu = sgrp2.top.upper.x, sgrp2.top.upper.y
         
-        local nrlbl = c_conf.cntCatGroups:createLabel(vec2(xl, yl + 3), string.format("#%i", g), 14)
-        local namelbl = c_conf.cntCatGroups:createLabel(vec2(xl + 30, yl), string.format("Group#%i", g), 16)
+        local nrlbl = c_conf.cntCatGroups:createLabel(vec2(xl + 2, yl + 8), string.format("#%i", g), 14)
+        local namelbl = c_conf.cntCatGroups:createLabel(vec2(xl + 32, yl + 5), string.format("Group#%i", g), 16)
         local renbtn = c_conf.cntCatGroups:createButton(Rect(xu - 90, yl, xu, yl + 30), "Rename", "onRenameGroupPressed")
 
         local xl, yl = sgrp2.bottom.lower.x, sgrp2.bottom.lower.y
         local xu, yu = sgrp2.bottom.upper.x, sgrp2.bottom.upper.y
 
-        local hudchk = c_conf.cntCatGroups:createCheckBox(Rect(xl, yl, xl + 150, yl + 20), "Show on HUD", "onGroupHudChecked") 
-        local hudcolorlbl = c_conf.cntCatGroups:createLabel(vec2(xl + 160, yl + 26), "HUD Color:", 13)
-
-        --local hudcolorpic = c_conf.cntCatGroups:createPicture(Rect(xl + 250, ))
-
+        local hudchk = c_conf.cntCatGroups:createCheckBox(Rect(xl + 10, yl + 8, xl + 150, yl + 20), "Show on HUD", "onGroupHudChecked") 
+        
+        local hudcolorlbl = c_conf.cntCatGroups:createLabel(vec2(xl + 200, yl + 7), "HUD Color:", 13)
+        local hudcolorprev = c_conf.cntCatGroups:createPicture(Rect(xl + 300, yl, xl + 330, yl + 30), "data/textures/icons/fleetcontrol/white.png")
+        local hudcolorpic = c_conf.cntCatGroups:createButton(Rect(xl + 335, yl, xl + 365, yl + 30), "", "onPickHudColorPressed")
+        hudcolorpic.icon = "data/textures/icons/fleetcontrol/colorpicker.png"
+        hudcolorpic.tooltip = "Choose HUD color"
+       
         nrlbl.color = ColorRGB(0.2, 0.2, 0.2)
-        hudcolorlbl.italic = true
-        hudchk.italic = true
-        hudchk.fontSize = 13
+        hudcolorprev.color = ColorARGB(0.5, 1, 1, 1)
+        -- hudcolorlbl.italic = true
+        -- hudchk.italic = true
+        -- hudchk.fontSize = 13
 
         c_conf.groups.lblName[g] = namelbl
         c_conf.groups.btnRename[g] = renbtn
         c_conf.groups.chkShowHud[g] = hudchk
+        c_conf.groups.picHudColorPrev[g] = hudcolorprev
+        c_conf.groups.btnHudColorPick[g] = hudcolorpic
     end
 
     -- HUD options
@@ -535,8 +570,7 @@ function buildConfigUI(parent)
 
     c_conf.cntCatHUD:createLabel(vec2(0, 0), "HUD Options", 16)
     c_conf.cntCatHUD:createLine(vec2(0, 30), vec2(rs.x, 30))
-    
-    
+      
     c_conf.lstCategories:select(0)
     c_conf.cntCatHUD:hide()
 
@@ -774,12 +808,194 @@ end
 
 function onRenameGroupPressed(sender)
 
+    for i, btn in pairs(c_conf.groups.btnRename) do
+		if btn.index == sender.index then
+            showTextDialog("Rename Group", i, onRenameGroupCallback, groupconfig[i].name, groupnamelimit)
+		end
+	end
+
 end
+
+function onRenameGroupCallback(result, text, param)
+
+    if result and text and text ~= "" then
+        -- update UI and config with new group name
+        groupconfig[param].name = text
+        config.groupconfig = groupconfig
+        refreshGroupNames()
+    end
+
+end
+
 
 function onGroupHudChecked(sender)
 
+    for i, chk in pairs(c_conf.groups.chkShowHud) do
+		if chk.index == sender.index then
+            groupconfig[i].showhud = chk.checked
+            config.groupconfig = groupconfig
+		end
+	end
+
 end
 
+
+function onPickHudColorPressed(sender)
+
+    for i, btn in pairs(c_conf.groups.btnHudColorPick) do
+		if btn.index == sender.index then
+            local color = ColorARGB(groupconfig[i].hudcolor.a, groupconfig[i].hudcolor.r, groupconfig[i].hudcolor.g, groupconfig[i].hudcolor.b)
+            showColorDialog("Choose HUD Color", i, onPickHudColorCallback, color)
+		end
+	end
+
+end
+
+function onPickHudColorCallback(result, color, param)
+
+    if result and color then
+        -- update UI and config with new group name
+        groupconfig[param].hudcolor = {a=color.a,r=color.r,g=color.g,b=color.b}
+        config.groupconfig = groupconfig
+        c_conf.groups.picHudColorPrev[param].color = color
+    end
+
+end
+
+---- DIALOG WINDOWS ----
+
+function buildTextDialog(menu, res)
+
+    local size = vec2(350, 120)
+
+    textdialog.window = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
+    textdialog.window.visible = false
+    textdialog.window.showCloseButton = 1
+    textdialog.window.moveable = 1
+    textdialog.window.closeableWithEscape = 1
+
+    local split1 = UIHorizontalSplitter(Rect(vec2(0, 0), size), 30, 20, 0.5)
+    split1.bottomSize = 30
+
+    textdialog.textbox = textdialog.window:createTextBox(split1.top, "")
+
+    local xu, yu = split1.bottom.upper.x, split1.bottom.upper.y
+    textdialog.window:createButton(Rect(xu - 170, yu - 30, xu - 90, yu), "OK", "onTextDialogOKPressed")
+    textdialog.window:createButton(Rect(xu - 80, yu - 30, xu, yu), "Cancel", "onTextDialogCancelPressed")
+
+end
+
+function onTextDialogOKPressed()
+
+    textdialog.window:hide()
+
+    if textdialog.callback and type(textdialog.callback) == "function" then
+        textdialog.callback(true, textdialog.textbox.text, textdialog.param)
+    end
+
+end
+
+function onTextDialogCancelPressed()
+
+    textdialog.window:hide()
+
+    if textdialog.callback and type(textdialog.callback) == "function" then
+        textdialog.callback(false)
+    end
+
+end
+
+function showTextDialog(caption, param, callback, text, maxlen)
+
+    textdialog.window.caption = caption
+    textdialog.textbox.text = text or ""
+    textdialog.textbox.maxCharacters = maxlen or 256
+
+    textdialog.param = param
+    textdialog.callback = callback
+
+    textdialog.window:show()
+
+end
+
+
+function buildColorDialog(menu, res)
+
+    local size = vec2(500, 400)
+
+    colordialog.window = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
+    colordialog.window.visible = false
+    colordialog.window.showCloseButton = 1
+    colordialog.window.moveable = 1
+    colordialog.window.closeableWithEscape = 1
+
+    local split1 = UIHorizontalSplitter(Rect(vec2(0, 0), size), 30, 20, 0.5)
+    split1.bottomSize = 30
+
+    local split2 = UIVerticalSplitter(split1.top, 0, 0, 0.5)
+    colordialog.colorpreview = colordialog.window:createPicture(split2.left, "data/textures/icons/fleetcontrol/white.png")
+    colordialog.colorpreview.color = ColorARGB(0, 1, 1, 1)
+
+    local msplit1 = UIHorizontalMultiSplitter(split2.right, 30, 30, 3)
+    colordialog.sliderR = colordialog.window:createSlider(msplit1:partition(0), 0, 255, 255, "RED", "refreshColorDialogPreview")
+    colordialog.sliderG = colordialog.window:createSlider(msplit1:partition(1), 0, 255, 255, "GREEN", "refreshColorDialogPreview")
+    colordialog.sliderB = colordialog.window:createSlider(msplit1:partition(2), 0, 255, 255, "BLUE", "refreshColorDialogPreview")
+    colordialog.sliderA = colordialog.window:createSlider(msplit1:partition(3), 0, 255, 255, "Alpha", "refreshColorDialogPreview")
+
+    local xu, yu = split1.bottom.upper.x, split1.bottom.upper.y
+    colordialog.window:createButton(Rect(xu - 170, yu - 30, xu - 90, yu), "OK", "onColorDialogOKPressed")
+    colordialog.window:createButton(Rect(xu - 80, yu - 30, xu, yu), "Cancel", "onColorDialogCancelPressed")
+
+end
+
+function refreshColorDialogPreview()
+
+    local valA = colordialog.sliderA.sliderPosition
+    local valR = colordialog.sliderR.sliderPosition
+    local valG = colordialog.sliderG.sliderPosition
+    local valB = colordialog.sliderB.sliderPosition
+
+    local color = ColorARGB(valA, valR, valG, valB)
+    colordialog.colorpreview.color = color
+    colordialog.color = color
+
+end
+
+function onColorDialogOKPressed()
+
+    colordialog.window:hide()
+
+    if colordialog.callback and type(colordialog.callback) == "function" then
+        colordialog.callback(true, colordialog.color, colordialog.param)
+    end
+
+end
+
+function onColorDialogCancelPressed()
+
+    colordialog.window:hide()
+
+    if colordialog.callback and type(colordialog.callback) == "function" then
+        colordialog.callback(false)
+    end
+
+end
+
+function showColorDialog(caption, param, callback, color)
+
+    colordialog.window.caption = caption
+    colordialog.colorpreview.color = color
+    -- TODO: sync sliders
+
+    colordialog.param = param
+    colordialog.callback = callback
+
+    colordialog.window:show()
+
+end
+
+
+---- UI UPDATES ----
 
 function displayShipState(g, s, ship, currloc)
 
@@ -1066,7 +1282,7 @@ function syncShipInfos(data)
 end
 
 
--- SERVER-SIDE FUNCTIONS
+---- SERVER-SIDE ----
 
 function updateShipStates(groups, ships)
 
@@ -1208,7 +1424,7 @@ end
 
 
 
--- UTILITY FUNCTIONS
+---- UTILITY FUNCTIONS ----
 
 function orderGroupsIter()
     local i = 0
