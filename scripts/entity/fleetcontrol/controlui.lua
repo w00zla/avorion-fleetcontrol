@@ -46,6 +46,7 @@ local configdefaults = {
     hud = {
             enablehud = false
         },
+    knownships = {},
     shipgroups = { {},{},{},{} }
 }
 
@@ -136,7 +137,7 @@ local shipgroups
 
 -- runtime data
 local shipinfos -- server&client
-local knownships = {}
+local knownships
 
 -- widget indices
 local shipPoolLastIndex
@@ -169,6 +170,7 @@ function initialize()
     groupconfig = config.groups
     hudconfig = config.hud
     shipgroups = config.shipgroups
+    knownships = config.knownships
 
     if hudconfig.enablehud then
         subscribeHudCallbacks()
@@ -179,15 +181,14 @@ end
 
 function secure()
 
-    return shipinfos, knownships
+    return shipinfos
 
 end
 
 
-function restore(data1, data2)
+function restore(data)
 
-    shipinfos = data1
-    knownships = data2 or {}
+    shipinfos = data
 
 end
 
@@ -1253,7 +1254,6 @@ function refreshGroupsUIShips()
     end
 
     -- fill pool list with rest
-    -- TODO: sort alphabetically
     c_grp.lstPool:clear()
     for _, ship in pairs(knownships) do 
         local assigned = false
@@ -1333,10 +1333,16 @@ function updateClient(timeStep)
             -- TODO: add new ship scripts here!!
 
             -- add new ships to known ones
+            local knownshipsupdate = false
             for _, ship in pairs(sectorships) do 
                 if not table.contains(knownships, ship.name) then
                     table.insert(knownships, ship.name)
+                    knownshipsupdate = true
                 end
+            end
+            if knownshipsupdate then
+                alphanumsort(knownships)
+                config.knownships = knownships
             end
 
             -- update ship states and refresh ships UI widgets

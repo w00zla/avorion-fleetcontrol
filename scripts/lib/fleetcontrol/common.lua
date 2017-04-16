@@ -137,6 +137,17 @@ function table.contains(table, value)
 end
 
 
+-- source: http://notebook.kulchenko.com/algorithms/alphanumeric-natural-sorting-for-humans-in-lua
+function alphanumsort(o)
+
+  local function padnum(d) return ("%03d%s"):format(#d, d) end
+  table.sort(o, function(a,b)
+    return tostring(a):gsub("%d+",padnum) < tostring(b):gsub("%d+",padnum) end)
+  return o
+
+end
+
+
 function checkShipCaptain(entity)
 
     if entity.isShip then
