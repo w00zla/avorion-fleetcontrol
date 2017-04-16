@@ -30,8 +30,9 @@ local configprefix = "fleetcontrol_"
 local myconfig = CachedConfig(configprefix, configdefaults, "player")
 
 -- globals
+fc_script_manager = "data/scripts/player/fleetcontrol/manager.lua"
+fc_script_controlui = "data/scripts/entity/fleetcontrol/controlui.lua"
 av_script_craftorders = "data/scripts/entity/craftorders.lua"
-fc_script_controlui = "fleetcontrol/controlui.lua"
 
 -- useful stuff
 local ordersInfo = {

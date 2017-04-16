@@ -927,7 +927,7 @@ end
 
 function buildColorDialog(menu, res)
 
-    local size = vec2(500, 400)
+    local size = vec2(500, 375)
 
     colordialog.window = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
     colordialog.window.visible = false
@@ -938,9 +938,17 @@ function buildColorDialog(menu, res)
     local split1 = UIHorizontalSplitter(Rect(vec2(0, 0), size), 30, 20, 0.5)
     split1.bottomSize = 30
 
-    local split2 = UIVerticalSplitter(split1.top, 0, 0, 0.5)
-    colordialog.colorpreview = colordialog.window:createPicture(split2.left, "data/textures/icons/fleetcontrol/white.png")
+    local split2 = UIVerticalSplitter(split1.top, 20, 0, 0.5)
+    local split3 = UIHorizontalSplitter(split2.left, 20, 0, 0.5)
+    split3.topSize = 30
+
+    local xl, yl = split3.top.lower.x, split3.top.lower.y
+    local prevlbl = colordialog.window:createLabel(vec2(xl + 40, yl + 10), "Color Preview:", 16)
+    prevlbl.italic = true
+    colordialog.colorpreview = colordialog.window:createPicture(split3.bottom, "data/textures/icons/fleetcontrol/white.png")
     colordialog.colorpreview.color = ColorARGB(0, 1, 1, 1)
+
+    local frm = colordialog.window:createFrame(split2.right)
 
     local msplit1 = UIHorizontalMultiSplitter(split2.right, 30, 30, 3)
     colordialog.sliderR = colordialog.window:createSlider(msplit1:partition(0), 0, 255, 255, "RED", "refreshColorDialogPreview")
