@@ -21,7 +21,7 @@ require "fleetcontrol.common"
 local configdefaults = {
     updatedelay = 750,
     debugoutput = false,
-    groupconfig = {
+    groups = {
             {
                 name="Group 1",
                 showhud=false,
@@ -42,6 +42,9 @@ local configdefaults = {
                 showhud=false,
                 hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
             }    
+        },
+    hud = {
+            enablehud = false
         },
     shipgroups = { {},{},{},{} }
 }
@@ -113,6 +116,9 @@ local c_conf = {
         chkShowHud = {},
         picHudColorPrev = {},
         btnHudColorPick = {}
+    },
+    hud = {
+        chkEnableHud = nil
     }
 }
 
@@ -125,6 +131,7 @@ local groupnamelimit = 18
 local config
 local ordersInfo
 local groupconfig
+local hudconfig
 local shipgroups
 
 -- runtime data
@@ -143,6 +150,7 @@ local uivisible = false
 local doupdatestates = false
 local laststateupdate = 0
 local ordersbusy = false
+local hudsubscribed = false
 
 
 function initialize()
@@ -158,8 +166,13 @@ function initialize()
     ordersInfo = getOrdersInfo()
 
     -- init runtime configs
-    groupconfig = config.groupconfig
+    groupconfig = config.groups
+    hudconfig = config.hud
     shipgroups = config.shipgroups
+
+    if hudconfig.enablehud then
+        subscribeHudCallbacks()
+    end
 
 end
 
@@ -186,6 +199,25 @@ end
 
 function interactionPossible(player)
     return true, ""
+end
+
+
+function subscribeHudCallbacks()
+
+    if not hudsubscribed then
+        Sector():registerCallback("onPreRenderHud", "onPreRenderHud")
+        hudsubscribed = true
+    end
+    debugLog("subscribeHudCallbacks()")
+
+end
+
+function unsubscribeHudCallbacks()
+
+    Sector():unregisterCallback("onPreRenderHud", "onPreRenderHud")
+    hudsubscribed = false
+    debugLog("unsubscribeHudCallbacks()")
+
 end
 
 
@@ -511,8 +543,7 @@ function buildConfigUI(parent)
 
     local rs = c_conf.cntCatGroups.size
 
-    local catgrp = c_conf.cntCatGroups:createLabel(vec2(0, 0), "Groups Options", 16)
-    -- catgrp.bold = true
+    c_conf.cntCatGroups:createLabel(vec2(0, 0), "Groups Options", 16)
     c_conf.cntCatGroups:createLine(vec2(0, 30), vec2(rs.x, 30))
 
     local sgrp1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 3)
@@ -549,9 +580,6 @@ function buildConfigUI(parent)
        
         nrlbl.color = ColorRGB(0.2, 0.2, 0.2)
         hudcolorprev.color = ColorARGB(0.5, 1, 1, 1)
-        -- hudcolorlbl.italic = true
-        -- hudchk.italic = true
-        -- hudchk.fontSize = 13
 
         c_conf.groups.lblName[g] = namelbl
         c_conf.groups.btnRename[g] = renbtn
@@ -565,12 +593,14 @@ function buildConfigUI(parent)
     c_conf.lstCategories:addEntry("HUD")
     c_conf.cntCatHUD = parent:createContainer(split1.right)
 
-    local shud1 = UIHorizontalSplitter(split1.right, 10, 0, 0.5)
-    shud1.topSize = 30
-    local rs = shud1.top.size
+    local rs = c_conf.cntCatHUD.size
 
     c_conf.cntCatHUD:createLabel(vec2(0, 0), "HUD Options", 16)
     c_conf.cntCatHUD:createLine(vec2(0, 30), vec2(rs.x, 30))
+
+    -- local sgrp1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 3)
+
+    c_conf.hud.chkEnableHud = c_conf.cntCatHUD:createCheckBox(Rect(10, 70, 200, 85), "Enable HUD Display", "onEnableHudChecked")
       
     c_conf.lstCategories:select(0)
     c_conf.cntCatHUD:hide()
@@ -598,6 +628,7 @@ function onTabSelected()
 
         -- update config tab widgets
         refreshConfigUIGroups()
+        refreshConfigUIHud()
 
     end
 
@@ -827,7 +858,7 @@ function onRenameGroupCallback(result, text, param)
     if result and text and text ~= "" then
         -- update UI and config with new group name
         groupconfig[param].name = text
-        config.groupconfig = groupconfig
+        config.groups = groupconfig
         refreshGroupNames()
     end
 
@@ -839,7 +870,7 @@ function onGroupHudChecked(sender)
     for i, chk in pairs(c_conf.groups.chkShowHud) do
 		if chk.index == sender.index then
             groupconfig[i].showhud = chk.checked
-            config.groupconfig = groupconfig
+            config.groups = groupconfig
 		end
 	end
 
@@ -862,11 +893,27 @@ function onPickHudColorCallback(result, color, param)
     if result and color then
         -- update UI and config with new group name
         groupconfig[param].hudcolor = {a=color.a,r=color.r,g=color.g,b=color.b}
-        config.groupconfig = groupconfig
+        config.groups = groupconfig
         refreshConfigUIGroups()
     end
 
 end
+
+
+function onEnableHudChecked()
+
+    -- update config and save
+    hudconfig.enablehud = c_conf.hud.chkEnableHud.checked
+    config.hud = hudconfig
+
+    if hudconfig.enablehud then
+        subscribeHudCallbacks()
+    else
+        unsubscribeHudCallbacks()
+    end
+
+end
+
 
 ---- DIALOG WINDOWS ----
 
@@ -1164,6 +1211,13 @@ function refreshConfigUIGroups()
 end
 
 
+function refreshConfigUIHud()
+
+    c_conf.hud.chkEnableHud.checked = hudconfig.enablehud
+
+end
+
+
 function refreshPageInfo()
 
     local lb = ((currentPage * ordergroupslimit) - ordergroupslimit + 1)
@@ -1293,6 +1347,26 @@ function updateClient(timeStep)
         end
 
     end
+
+    -- draw HUD elements if enabled
+    if hudconfig.enablehud then
+        drawHud()
+    end
+
+end
+
+
+function onPreRenderHud()
+
+    debugLog("onPreRenderHud()")
+    --drawText("TEST", 10, 500, ColorARGB(0.5, 1, 1, 1), 16, false, false, 0)
+
+end
+
+
+function drawHud()
+
+    drawText("TEST", 10, 500, ColorARGB(0.5, 1, 1, 1), 16, false, false, 0)
 
 end
 
