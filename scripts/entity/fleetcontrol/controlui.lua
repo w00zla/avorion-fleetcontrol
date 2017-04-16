@@ -17,6 +17,7 @@ require "fleetcontrol.common"
 
 -- Config
 
+-- TODO: maybe optimize for use of ColorInt for color values
 local configdefaults = {
     updatedelay = 750,
     debugoutput = false,
@@ -593,6 +594,11 @@ function onTabSelected()
         refreshGroupsUIShips()
         refreshGroupsInfo()
 
+    elseif tabs.config and tabs.config.index == selectedtabidx then
+
+        -- update config tab widgets
+        refreshConfigUIGroups()
+
     end
 
 end
@@ -857,7 +863,7 @@ function onPickHudColorCallback(result, color, param)
         -- update UI and config with new group name
         groupconfig[param].hudcolor = {a=color.a,r=color.r,g=color.g,b=color.b}
         config.groupconfig = groupconfig
-        c_conf.groups.picHudColorPrev[param].color = color
+        refreshConfigUIGroups()
     end
 
 end
@@ -985,7 +991,12 @@ function showColorDialog(caption, param, callback, color)
 
     colordialog.window.caption = caption
     colordialog.colorpreview.color = color
-    -- TODO: sync sliders
+
+    -- sync value sliders
+    colordialog.sliderA.sliderPosition = color.a
+    colordialog.sliderR.sliderPosition = color.r
+    colordialog.sliderG.sliderPosition = color.g
+    colordialog.sliderB.sliderPosition = color.b
 
     colordialog.param = param
     colordialog.callback = callback
@@ -1123,12 +1134,25 @@ function refreshGroupNames()
         c_ord.lblGroupName[i].caption = groupconfig[g].name
     end
 
-    -- Groups and Config tab
     for g = 1, 4 do 
+        -- Groups tab
         c_grp.groups.lblName[g].caption = groupconfig[g].name
-        c_conf.groups.lblName[g].caption = groupconfig[g].name
+        -- Config tab
+        c_conf.groups.lblName[g].caption = groupconfig[g].name      
     end
     
+end
+
+
+function refreshConfigUIGroups()
+
+    for g = 1, 4 do 
+        c_conf.groups.lblName[g].caption = groupconfig[g].name
+        c_conf.groups.chkShowHud[g].checked = groupconfig[g].showhud or false
+        local hudcolor = groupconfig[g].hudcolor
+        c_conf.groups.picHudColorPrev[g].color = ColorARGB(hudcolor.a, hudcolor.r, hudcolor.g, hudcolor.b)
+    end
+
 end
 
 
