@@ -20,7 +20,6 @@ require "fleetcontrol.common"
 local sconfigdefaults = {
     updatedelay = 750
 }
--- TODO: maybe optimize for use of ColorInt for color values
 local pconfigdefaults = {
     groups = {
             {
@@ -147,6 +146,8 @@ local configCatsLastIndex
 local groupListsLastIndices = {}
 local currentPage = 1
 local selectedtabidx
+local lastshiporder = {}
+local lastgrouporder = {}
 
 -- runtime flags and timestamps
 local uivisible = false
@@ -734,8 +735,6 @@ end
 
 function onGroupOrderSelected(sender)
 
-    -- TODO: prevent re-selection of current order
-
     local cbox, grp
     for i, g in orderGroupsIter() do
         if sender.index == c_ord.cmdGroupOrder[i].index then
@@ -746,9 +745,12 @@ function onGroupOrderSelected(sender)
     end
 
     if cbox.selectedIndex < 1 then return end
-
+    
     if ordersbusy then return end
     ordersbusy = true
+
+    local oi = ordersInfo[cbox.selectedIndex]
+    if lastgrouporder[grp] and lastgrouporder[grp] == oi.order then return end
 
     local indices = {}
     local pshipIndex = Player().craftIndex
@@ -759,7 +761,7 @@ function onGroupOrderSelected(sender)
             indices[i] = info.index
         end
 	end
-    invokeOrdersScript(indices, ordersInfo[cbox.selectedIndex])
+    invokeOrdersScript(indices, oi)
 
 end
 
@@ -769,14 +771,15 @@ function onShipOrderSelected(sender)
     if ordersbusy then return end
     ordersbusy = true
 
-    -- TODO: prevent re-selection of current order
-
     for i, g in orderGroupsIter() do
         for s, cmd in pairs(c_ord.ships.cmdOrder[i]) do
             if cmd.index == sender.index then
                 if cmd.selectedIndex < 1 then return end
-                local indices = {shipinfos[g][s].index}	
-                invokeOrdersScript(indices, ordersInfo[cmd.selectedIndex])
+                local oi = ordersInfo[cmd.selectedIndex]
+                if lastshiporder[shipinfos[g][s].name] == nil or oi.order ~= lastshiporder[shipinfos[g][s].name] then
+                    local indices = {shipinfos[g][s].index}	
+                    invokeOrdersScript(indices, oi)
+                end
                 break
             end
         end
@@ -1155,6 +1158,7 @@ function displayShipState(g, s, ship, currloc)
                 c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)    
                 for i, oi in pairs(ordersInfo) do 
                     if oi.order == ship.order then
+                        lastshiporder[ship.name] = oi.order
                         c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
                         break
                     end
@@ -1195,11 +1199,11 @@ function refreshOrdersUI()
 
     for i, g in orderGroupsIter() do
         local ordersequal = #shipinfos[g] > 0
-        local lastorder 
+        local lastorder = nil
 
         for s, shipinfo in pairs(shipinfos[g]) do 
             -- check if all ships have same order/state
-            if lastorder and lastorder ~= shipinfo.order then
+            if lastorder and shipinfo.order and lastorder ~= shipinfo.order then
                 ordersequal = false
             end
             lastorder = shipinfo.order
@@ -1211,6 +1215,7 @@ function refreshOrdersUI()
         if ordersequal then
             for j, oi in pairs(ordersInfo) do 
                 if oi.order == lastorder then
+                    lastgrouporder[g] = oi.order
                     c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
                     break
                 end
