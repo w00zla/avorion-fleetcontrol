@@ -18,16 +18,13 @@ CachedConfig = require("fleetcontrol.cachedconfig")
 -- MODINFO
 local modInfo = {  
     name = "fleetcontrol",
-    version = "0.1",
+    version = "0.3",
     author = "w00zla"
 }
 
 -- config
-local configdefaults = {
-    debugoutput = false
-}
+local debugoutput = false
 local configprefix = "fleetcontrol_"
-local myconfig = CachedConfig(configprefix, configdefaults, "player")
 
 -- globals
 fc_script_manager = "data/scripts/player/fleetcontrol/manager.lua"
@@ -45,6 +42,11 @@ local ordersInfo = {
     { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed"},
     { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed"}
 }
+
+
+function enableDebugOutput(enable)
+    debugoutput = enable or true
+end
 
 
 function getConfig(scope, defaults)
@@ -106,7 +108,7 @@ end
 
 function debugLog(msg, ...)
 
-    if myconfig.debugoutput and msg and msg ~= "" then
+    if debugoutput and msg and msg ~= "" then
         local pinfo = ""
         if onServer() then
             local player = Player()

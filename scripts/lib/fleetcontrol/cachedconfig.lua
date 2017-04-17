@@ -9,8 +9,9 @@ desc: configuration util for fleetcontrol mod (with cached values)
 ]]--
 
 package.path = package.path .. ";data/scripts/lib/?.lua"
+package.path = package.path .. ";data/scripts/lib/fleetcontrol/?.lua"
 
-json = require("fleetcontrol.json")
+json = require("json")
 
 
 local CachedConfig = {
@@ -29,6 +30,7 @@ local function new(prefix, defaults, scope, index)
     end 
   
     local obj = {
+        _cache = {},
         _prefix = prefix
     }
 
@@ -132,24 +134,33 @@ function CachedConfig_CommitSave(scope, index, config, val)
 end
 
 
+local function getParams(t)
+
+    return rawget(t, "_scope"), rawget(t, "_index"), rawget(t, "_prefix"), rawget(t, "_defaults")
+
+end 
+
+
 -- wrap the lookup of existing properties
 CachedConfig.__index = function(t, k) 
-    local value = rawget(t, "_c_"..k)
-    if value == nil then 
+    local cache = rawget(t, "_cache")
+    if cache[k] == nil then 
         -- load value from storage and cache result in table 
-        value = loadValue(k, rawget(t, "_scope"), rawget(t, "_index"), rawget(t, "_prefix"), rawget(t, "_defaults"))
-        rawset(t, "_c_"..k, value)
+        local s, i, p, d = getParams(t)
+        value = loadValue(k, s, i, p, d)
+        cache[k] = value
     end
-    return value
+    return cache[k]
 end
 
 
 -- wrap the assignment of property values
 CachedConfig.__newindex = function(t, k, v)  
-    local value = rawget(t, "_c_"..k)
+    local cache = rawget(t, "_cache")
     -- save value to storage and update cached result in table 
-    saveValue(rawget(t, "_scope"), rawget(t, "_index"), rawget(t, "_prefix"), k, v)
-    rawset(t, "_c_"..k, v) 
+    local s, i, p = getParams(t)
+    saveValue(s, i, p, k, v)
+    cache[k] = v
 end
 
 

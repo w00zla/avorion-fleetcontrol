@@ -8,6 +8,9 @@ desc:  player script for managing fleet data and entity UI scripts
 
 ]]--
 
+if onServer() then -- make this script run server-side only
+
+
 package.path = package.path .. ";data/scripts/lib/?.lua"
 
 require "utility"
@@ -21,10 +24,15 @@ local lastCraft
 
 function initialize()
 
+    local sconfig = getConfig("server", sconfigdefaults)
+    enableDebugOutput(sconfig.debugoutput) 
+
+    local player = Player()
+
     -- subscribe to event callbacks
-    Player():registerCallback("onShipChanged", "onShipChanged")	
-    
-    addShipScript(fc_script_controlui) 
+    player:registerCallback("onShipChanged", "onShipChanged")	
+    -- add UI script
+    addShipUIScript(player.craftIndex) 
     
 end
 
@@ -33,10 +41,8 @@ end
 -- given return values are persisted into galaxy database
 function secure()
 
-    if lastCraft then
-        return lastCraft
-    end
-    
+    return lastCraft
+
 end
 
 
@@ -51,20 +57,54 @@ end
 
 function onShipChanged(playerIndex, craftIndex)
 
-    -- remove and add script to ship entities
-    removeEntityScript(lastCraft, fc_script_controlui)	
-    addShipScript(fc_script_controlui)	
+    local player = Player(playerIndex)
+    local shipidx = player.craftIndex
+
+    -- get runtime data from current UI script instance
+    local data = pullUIScriptRuntimeData(shipidx)
+
+    --add and remove UI script for ship entities
+    removeShipUIScript(shipidx)	
+    addShipUIScript(shipidx)	
+
+    pushUIScriptRuntimeData(shipidx, data)
+    
+end
+
+
+function pullUIScriptRuntimeData(shipidx)
+
+    if shipidx and shipidx > 0 then
+        local entity = Entity(shipidx)
+        if entity then
+            local res, data = entity:invokeFunction(fc_script_controlui, "getShipInfos")
+            debugLog("pullUIScriptRuntimeData() --> invoke 'getShipInfos': %s", res)
+            return data
+        end
+    end
+
+end
+
+function pushUIScriptRuntimeData(shipidx, data)
+
+    if shipidx and shipidx > 0 then
+        local entity = Entity(shipidx)
+        if entity then
+            local res = entity:invokeFunction(fc_script_controlui, "setShipInfos", data)
+            debugLog("pushUIScriptRuntimeData() --> invoke 'setShipInfos': %s", res)
+        end
+    end
 
 end
 
 
-function addShipScript(script) 
+function addShipUIScript(shipidx)
 
-    -- add script to current ship entity
-    if Player().craftIndex and Player().craftIndex > 0 then
-        local entity = Entity(Player().craftIndex)
+    -- add script to ship entity
+    if shipidx and shipidx > 0 then
+        local entity = Entity(shipidx)
         if entity then
-            ensureEntityScript(entity, script)
+            ensureEntityScript(entity, fc_script_controlui)
             lastCraft = entity.index	
         end
     end
@@ -72,24 +112,19 @@ function addShipScript(script)
 end
 
 
-function removeScripts()
+function removeShipUIScript(shipidx)
 
-    -- TODO: remove scripts from all ships in sector
-
-    -- remove scripts(s) from player ship
-    local currentCraft = Player().craftIndex
-    removeEntityScript(currentCraft, fc_script_controlui)
-    
-    -- remove scripts(s) from last known ship for sakes
-    if lastCraft ~= currentCraft then
-        removeEntityScript(lastCraft, fc_script_controlui)
+    if shipidx and shipidx > 0 then
+        -- remove scripts(s) from player ship
+        removeEntityScript(shipidx, fc_script_controlui)
+        -- try remove scripts(s) from last known ship for sakes (i.e. after server crashes)
+        if lastCraft ~= shipidx then
+            removeEntityScript(lastCraft, fc_script_controlui)
+        end
     end
-
-    -- unsubscribe from event callbacks
-    Player():unregisterCallback("onShipChanged", "onShipChanged")
-
-    -- kill and remove script from entity
-    terminate()
     
 end
 
+-- TODO: implement uninstall function (remove all scripts from every entity)
+
+end

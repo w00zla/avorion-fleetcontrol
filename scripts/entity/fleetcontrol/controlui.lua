@@ -17,10 +17,11 @@ require "fleetcontrol.common"
 
 -- Config
 
+local sconfigdefaults = {
+    updatedelay = 750
+}
 -- TODO: maybe optimize for use of ColorInt for color values
-local configdefaults = {
-    updatedelay = 750,
-    debugoutput = false,
+local pconfigdefaults = {
     groups = {
             {
                 name="Group 1",
@@ -129,7 +130,8 @@ local groupshiplimit = 6
 local groupnamelimit = 18
 
 -- configs
-local config
+local pconfig
+local svals
 local ordersInfo
 local groupconfig
 local hudconfig
@@ -156,25 +158,63 @@ local hudsubscribed = false
 
 function initialize()
 
-    if onServer() then
-        return
+    -- TODO: implement server<->client version check
+
+    if onServer() then 
+        initServer()
+        return 
     end
 
-    -- TODO: load some configs from server (i.e. updatedelay)
+    initClient()
+
+end
+
+
+function initServer()
+
+    -- load server config and pass to client
+    local sconfig = getConfig("server", sconfigdefaults)
+    enableDebugOutput(sconfig.debugoutput)
+
+    svals = { updatedelay=sconfig.updatedelay, debugoutput=sconfig.debugoutput }   
+    syncServerValues(svals)
+
+end
+
+
+function initClient()
+
+    svals = sconfigdefaults
+    enableDebugOutput(svals.debugoutput)
 
     -- load config and dynamic data
-    config = getConfig("player", configdefaults)
+    pconfig = getConfig("player", pconfigdefaults)
     ordersInfo = getOrdersInfo()
 
     -- init runtime configs
-    groupconfig = config.groups
-    hudconfig = config.hud
-    shipgroups = config.shipgroups
-    knownships = config.knownships
+    groupconfig = pconfig.groups
+    hudconfig = pconfig.hud
+    shipgroups = pconfig.shipgroups
+    knownships = pconfig.knownships    
 
-    if hudconfig.enablehud then
-        subscribeHudCallbacks()
+    -- if hudconfig.enablehud then
+    --     subscribeHudCallbacks()
+    -- end
+
+end
+
+
+function syncServerValues(svalues)
+
+    if onServer() then
+        invokeClientFunction(Player(), "syncServerValues", svalues)
     end
+
+    svals = svalues
+    enableDebugOutput(svals.debugoutput)
+
+    -- debugLog("syncServerValues() -> svals:")
+    -- debugLog(printTable(svals))
 
 end
 
@@ -753,7 +793,7 @@ function onAssignShipGroupPressed(sender)
 		if btn.index == sender.index then
             -- update config data
             table.insert(shipgroups[i], shipname)
-            config.shipgroups = shipgroups
+            pconfig.shipgroups = shipgroups
             -- update list widgets
             c_grp.groups.lstShips[i]:addEntry(shipname)
             c_grp.lstPool:removeEntry(c_grp.lstPool.selected)
@@ -773,7 +813,7 @@ function onUnassignShipGroupPressed(sender)
 		if btn.index == sender.index then
             -- update config data
             table.remove(shipgroups[i], c_grp.groups.lstShips[i].selected + 1)
-            config.shipgroups = shipgroups
+            pconfig.shipgroups = shipgroups
             -- update list widgets
             local shipname = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)       
             c_grp.lstPool:addEntry(shipname)
@@ -798,7 +838,7 @@ function onGroupShipUpPressed(sender)
                 local s1, s2 = shipgroups[i][selidx], shipgroups[i][selidx-1]
                 shipgroups[i][selidx-1] = s1
                 shipgroups[i][selidx] = s2
-                config.shipgroups = shipgroups
+                pconfig.shipgroups = shipgroups
                 -- update list widgets
                 local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected-1)
                 c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected-1, s1, bold, italic, color)
@@ -826,7 +866,7 @@ function onGroupShipDownPressed(sender)
                 local s1, s2 = shipgroups[i][selidx], shipgroups[i][selidx+1]
                 shipgroups[i][selidx+1] = s1
                 shipgroups[i][selidx] = s2
-                config.shipgroups = shipgroups
+                pconfig.shipgroups = shipgroups
                 -- update list widgets
                 local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected+1)
                 c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected+1, s1, bold, italic, color)
@@ -859,7 +899,7 @@ function onRenameGroupCallback(result, text, param)
     if result and text and text ~= "" then
         -- update UI and config with new group name
         groupconfig[param].name = text
-        config.groups = groupconfig
+        pconfig.groups = groupconfig
         refreshGroupNames()
     end
 
@@ -871,7 +911,7 @@ function onGroupHudChecked(sender)
     for i, chk in pairs(c_conf.groups.chkShowHud) do
 		if chk.index == sender.index then
             groupconfig[i].showhud = chk.checked
-            config.groups = groupconfig
+            pconfig.groups = groupconfig
 		end
 	end
 
@@ -892,9 +932,9 @@ end
 function onPickHudColorCallback(result, color, param)
 
     if result and color then
-        -- update UI and config with new group name
+        -- update UI and pconfig with new group name
         groupconfig[param].hudcolor = {a=color.a,r=color.r,g=color.g,b=color.b}
-        config.groups = groupconfig
+        pconfig.groups = groupconfig
         refreshConfigUIGroups()
     end
 
@@ -905,7 +945,7 @@ function onEnableHudChecked()
 
     -- update config and save
     hudconfig.enablehud = c_conf.hud.chkEnableHud.checked
-    config.hud = hudconfig
+    pconfig.hud = hudconfig
 
     if hudconfig.enablehud then
         subscribeHudCallbacks()
@@ -1321,11 +1361,11 @@ end
 
 function updateClient(timeStep)
 
-    if doupdatestates then
+    if doupdatestates and svals then
 
         local current = systemTimeMs()
         -- only do update if configured delay has passed
-        if (current - laststateupdate) >= config.updatedelay then
+        if (current - laststateupdate) >= svals.updatedelay then
 
             -- get all exisiting ships of player in current sector
             local sectorships = getPlayerCrafts()
@@ -1342,7 +1382,7 @@ function updateClient(timeStep)
             end
             if knownshipsupdate then
                 alphanumsort(knownships)
-                config.knownships = knownships
+                pconfig.knownships = knownships
             end
 
             -- update ship states and refresh ships UI widgets
@@ -1522,17 +1562,17 @@ function invokeOrdersScript(shipindices, orderinfo)
 end
 
 
--- function requestShipInfoSync()
+function getShipInfos()
 
---     if onClient() then
---         invokeServerFunction("requestShipInfoSync")
---         return
---     end
+    return shipinfos
 
---     debugLog("shipinfo sync requested")
---     invokeClientFunction(Player(callingPlayer), "syncShipInfos", shipinfos)
+end
 
--- end
+function setShipInfos(data)
+
+    shipinfos = data
+
+end
 
 
 
