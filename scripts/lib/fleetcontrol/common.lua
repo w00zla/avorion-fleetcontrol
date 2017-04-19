@@ -138,6 +138,16 @@ function table.contains(table, value)
 
 end
 
+function table.childByKeyVal(table, key, value)
+
+    for i, t in pairs(table) do
+        if type(t) == "table" and t[key] == value then
+            return t, i
+        end
+    end
+
+end
+
 
 -- source: http://notebook.kulchenko.com/algorithms/alphanumeric-natural-sorting-for-humans-in-lua
 function alphanumsort(o)

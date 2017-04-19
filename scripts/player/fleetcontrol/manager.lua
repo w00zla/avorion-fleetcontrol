@@ -60,40 +60,9 @@ function onShipChanged(playerIndex, craftIndex)
     local player = Player(playerIndex)
     local shipidx = player.craftIndex
 
-    -- get runtime data from current UI script instance
-    local data = pullUIScriptRuntimeData(shipidx)
-
     --add and remove UI script for ship entities
     removeShipUIScript(shipidx)	
     addShipUIScript(shipidx)	
-
-    pushUIScriptRuntimeData(shipidx, data)
-    
-end
-
-
-function pullUIScriptRuntimeData(shipidx)
-
-    if shipidx and shipidx > 0 then
-        local entity = Entity(shipidx)
-        if entity then
-            local res, data = entity:invokeFunction(fc_script_controlui, "getShipInfos")
-            debugLog("pullUIScriptRuntimeData() --> invoke 'getShipInfos': %s", res)
-            return data
-        end
-    end
-
-end
-
-function pushUIScriptRuntimeData(shipidx, data)
-
-    if shipidx and shipidx > 0 then
-        local entity = Entity(shipidx)
-        if entity then
-            local res = entity:invokeFunction(fc_script_controlui, "setShipInfos", data)
-            debugLog("pushUIScriptRuntimeData() --> invoke 'setShipInfos': %s", res)
-        end
-    end
 
 end
 

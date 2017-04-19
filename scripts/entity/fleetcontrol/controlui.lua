@@ -222,14 +222,14 @@ end
 
 function secure()
 
-    return shipinfos
+    -- return shipinfos
 
 end
 
 
 function restore(data)
 
-    shipinfos = data
+    -- shipinfos = data
 
 end
 
@@ -264,6 +264,8 @@ end
 
 
 function onShowWindow()
+
+    debugLog("onShowWindow()")
 
     -- pre-select orders tab everytime window is opened
     tabs.window:selectTab(tabs.orders)
@@ -950,11 +952,11 @@ function onEnableHudChecked()
     hudconfig.enablehud = c_conf.hud.chkEnableHud.checked
     pconfig.hud = hudconfig
 
-    if hudconfig.enablehud then
-        subscribeHudCallbacks()
-    else
-        unsubscribeHudCallbacks()
-    end
+    -- if hudconfig.enablehud then
+    --     subscribeHudCallbacks()
+    -- else
+    --     unsubscribeHudCallbacks()
+    -- end
 
 end
 
@@ -1116,7 +1118,9 @@ function displayShipState(g, s, ship, currloc)
     c_ord.ships.lblName[g][s]:show()
 
     -- TODO: colors for states =)
-    if ship.isplayer then
+    if ship.elsewhere then
+        c_ord.ships.lblState[g][s].caption = "-"
+    elseif ship.isplayer then
         c_ord.ships.lblState[g][s].caption = "Player"
     elseif not ship.hascaptain then
         c_ord.ships.lblState[g][s].caption = "No Captain"
@@ -1141,34 +1145,32 @@ function displayShipState(g, s, ship, currloc)
         c_ord.ships.btnLook[g][s]:show() 
     end
    
-    if ship.hascaptain then
-        if ship.order then
-            if ship.elsewhere or ship.isplayer then
-                -- disable orders combobox if ship is controlled by player or elsewhere
-                c_ord.ships.lblOrder[g][s].caption = "-"
-                for i, oi in pairs(ordersInfo) do 
-                    if oi.order == ship.order then
-                        c_ord.ships.lblOrder[g][s].caption = oi.text
-                        break
-                    end
+    if ship.order then
+        if ship.elsewhere or ship.isplayer then
+            -- disable orders combobox if ship is controlled by player or elsewhere
+            c_ord.ships.lblOrder[g][s].caption = "-"
+            for i, oi in pairs(ordersInfo) do 
+                if oi.order == ship.order then
+                    c_ord.ships.lblOrder[g][s].caption = oi.text
+                    break
                 end
-                c_ord.ships.lblOrder[g][s]:show()
-            else
-                -- set selected order to ship's current order
-                c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)    
-                for i, oi in pairs(ordersInfo) do 
-                    if oi.order == ship.order then
-                        lastshiporder[ship.name] = oi.order
-                        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
-                        break
-                    end
-                end
-                c_ord.ships.cmdOrder[g][s]:show()
             end
-        elseif not ship.isplayer then
-            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
+            c_ord.ships.lblOrder[g][s]:show()
+        elseif ship.hascaptain then
+            -- set selected order to ship's current order
+            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)    
+            for i, oi in pairs(ordersInfo) do 
+                if oi.order == ship.order then
+                    lastshiporder[ship.name] = oi.order
+                    c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
+                    break
+                end
+            end
             c_ord.ships.cmdOrder[g][s]:show()
         end
+    elseif not ship.isplayer and ship.hascaptain then
+        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
+        c_ord.ships.cmdOrder[g][s]:show()
     end
 
     -- make rest of ship related widgets visible
@@ -1303,13 +1305,13 @@ function refreshGroupsUIShips()
     for _, ship in pairs(knownships) do 
         local assigned = false
         for i, shipgrp in pairs(shipgroups) do 
-            if table.contains(shipgrp, ship) then
+            if table.contains(shipgrp, ship.name) then
                 assigned = true
                 break
             end      
         end
         if not assigned then
-            c_grp.lstPool:addEntry(ship)
+            c_grp.lstPool:addEntry(ship.name)
         end
     end
     
@@ -1375,18 +1377,32 @@ function updateClient(timeStep)
             -- get all exisiting ships of player in current sector
             local sectorships = getPlayerCrafts()
 
-            -- TODO: add new ship scripts here!!
+            -- TODO: add ship entity scripts here!!
 
-            -- add new ships to known ones
+            local cx, cy = Sector():getCoordinates()
+            local coords = {x=cx, y=cy}          
+            
             local knownshipsupdate = false
-            for _, ship in pairs(sectorships) do 
-                if not table.contains(knownships, ship.name) then
-                    table.insert(knownships, ship.name)
+            for _, s in pairs(sectorships) do 
+                local ship, idx = table.childByKeyVal(knownships, "name", s.name)
+                if not ship then
+                    debugLog("updateClient() -> new known ship '%s'", s.name)
+                    -- add new ships to known ones
+                    table.insert(knownships, {name=s.name,location=coords})
                     knownshipsupdate = true
+                else                   
+                    -- update location info
+                    if ship.location.x ~= coords.x or ship.location.y ~= coords.y then
+                        debugLog("updateClient() -> update location info of ship '%s'", ship.name)
+                        knownships[idx].location = coords
+                        knownshipsupdate = true
+                    end
                 end
             end
             if knownshipsupdate then
-                alphanumsort(knownships)
+                debugLog("updateClient() -> updating player knownships")
+                -- TODO: apply sorting to new table structure
+                --alphanumsort(knownships)
                 pconfig.knownships = knownships
             end
 
@@ -1422,14 +1438,40 @@ function drawHud()
 end
 
 
-function syncShipInfos(data)
+function syncShipInfos(statedata)
 
-    if onServer() then
-        invokeClientFunction(Player(callingPlayer), "syncShipInfos", data)
-        return
+    -- merge states and known infos like location
+    local newstates = {}
+    for gi, gships in pairs(shipgroups) do
+        newstates[gi] = {}
+        for _, shipname in pairs(gships) do
+            local info 
+            local data = table.childByKeyVal(statedata, "name", shipname)
+            if data then
+                info = data
+                local known = table.childByKeyVal(knownships, "name", shipname)
+                if known then
+                    info.location = known.location
+                end
+            else
+                -- ship elsewhere -> reuse known info and mark it
+                local known = table.childByKeyVal(knownships, "name", shipname)
+                if known then
+                    --debugLog("syncShipInfos() -> ship '%s' not in player sector, restoring known info", shipname)
+                    info = {
+                        name = known.name,
+                        location = known.location,
+                        elsewhere = true
+                    }
+                else
+                    debugLog("syncShipInfos() -> no known info for '%s'!", shipname)
+                end
+            end
+            table.insert(newstates[gi], info)
+        end
     end
 
-    shipinfos = data
+    shipinfos = newstates
 
     -- update infos in UI
     if uivisible then
@@ -1449,8 +1491,6 @@ function updateShipStates(groups, ships)
     end
 
     local statedata = {}
-    local cx, cy = Sector():getCoordinates()
-    local coords = {x=cx, y=cy}
 
     -- create flat array of ship names to update
     local updateships = {}
@@ -1485,48 +1525,15 @@ function updateShipStates(groups, ships)
                         index = entity.index,
                         aistate = aistate,
                         order = order,
-                        location = coords,
                         hascaptain = hascaptain
                     })
                 end
             end
         end
-    end
-
-    -- merge new and old states and group the infos
-    local newstates = {}
-    for gi, gships in pairs(groups) do
-        newstates[gi] = {}
-        for _, shipname in pairs(gships) do
-            local info
-            for _, data in pairs(statedata) do
-                if data.name == shipname then
-                    -- ship in current sector -> update info
-                    info = data
-                    break
-                end
-            end
-            if not info and shipinfos then
-                -- ship elsewhere -> reuse old info and mark it
-                for _, data in pairs(shipinfos[gi]) do
-                    if data.name == shipname then
-                        info = {
-                            name = data.name,
-                            order = data.order,
-                            location = data.location,
-                            elsewhere = true
-                        }
-                        break
-                    end
-                end
-            end
-            table.insert(newstates[gi], info)
-        end
-    end
+    end    
 
     -- set server-side data and return to client
-    shipinfos = newstates
-    invokeClientFunction(Player(callingPlayer), "syncShipInfos", shipinfos)
+    invokeClientFunction(Player(callingPlayer), "syncShipInfos", statedata)
 
 end
 
@@ -1565,20 +1572,6 @@ function invokeOrdersScript(shipindices, orderinfo)
     end
 
 end
-
-
-function getShipInfos()
-
-    return shipinfos
-
-end
-
-function setShipInfos(data)
-
-    shipinfos = data
-
-end
-
 
 
 ---- UTILITY FUNCTIONS ----
