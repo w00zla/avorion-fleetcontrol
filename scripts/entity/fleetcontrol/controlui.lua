@@ -90,7 +90,6 @@ local c_ord = {
         lblLoc = {},
         btnLook = {},
         cmdOrder = {},
-        lblOrder = {}
     }
 }
 
@@ -370,7 +369,6 @@ function buildOrdersUI(parent)
         c_ord.ships.lblLoc[g] = {}
         c_ord.ships.btnLook[g] = {}
         c_ord.ships.cmdOrder[g] = {}
-        c_ord.ships.lblOrder[g] = {}
 
         local y_shp = y_grp + 15
         for s = 1, groupshiplimit do 
@@ -424,8 +422,6 @@ function buildOrdersUI(parent)
                 cbox:addEntry(btninfo.text)
             end
 
-            local orderLabel = parent:createLabel(vec2(split2.right.lower.x, split2.right.lower.y + 6), "", 15)
-
             -- hide controls initially and add to reference table
             frame:hide()
             nameLabel:hide()
@@ -433,7 +429,6 @@ function buildOrdersUI(parent)
             locLabel:hide()
             lookat:hide()
             cbox:hide()
-            orderLabel:hide()
 
             c_ord.ships.frame[g][s] = frame
             c_ord.ships.lblName[g][s] = nameLabel
@@ -441,7 +436,6 @@ function buildOrdersUI(parent)
             c_ord.ships.lblLoc[g][s] = locLabel
             c_ord.ships.btnLook[g][s] = lookat
             c_ord.ships.cmdOrder[g][s] = cbox
-            c_ord.ships.lblOrder[g][s] = orderLabel
 	   
         end
 
@@ -1145,32 +1139,19 @@ function displayShipState(g, s, ship, currloc)
         c_ord.ships.btnLook[g][s]:show() 
     end
    
-    if ship.order then
-        if ship.elsewhere or ship.isplayer then
-            -- disable orders combobox if ship is controlled by player or elsewhere
-            c_ord.ships.lblOrder[g][s].caption = "-"
-            for i, oi in pairs(ordersInfo) do 
-                if oi.order == ship.order then
-                    c_ord.ships.lblOrder[g][s].caption = oi.text
-                    break
-                end
-            end
-            c_ord.ships.lblOrder[g][s]:show()
-        elseif ship.hascaptain then
-            -- set selected order to ship's current order
-            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)    
-            for i, oi in pairs(ordersInfo) do 
-                if oi.order == ship.order then
+    if not ship.elsewhere and not ship.isplayer then
+        if ship.hascaptain then
+            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
+            c_ord.ships.cmdOrder[g][s]:show()
+            if ship.order then
+                -- set selected order to ship's current order
+                local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
+                if oi then
                     lastshiporder[ship.name] = oi.order
                     c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
-                    break
                 end
             end
-            c_ord.ships.cmdOrder[g][s]:show()
         end
-    elseif not ship.isplayer and ship.hascaptain then
-        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
-        c_ord.ships.cmdOrder[g][s]:show()
     end
 
     -- make rest of ship related widgets visible
@@ -1190,7 +1171,6 @@ function refreshOrdersUI()
             c_ord.ships.lblLoc[g][s]:hide()
             c_ord.ships.btnLook[g][s]:hide()
             c_ord.ships.cmdOrder[g][s]:hide()
-            c_ord.ships.lblOrder[g][s]:hide()
         end
     end
 
@@ -1215,12 +1195,10 @@ function refreshOrdersUI()
 
         -- pre-select group order
         if ordersequal then
-            for j, oi in pairs(ordersInfo) do 
-                if oi.order == lastorder then
-                    lastgrouporder[g] = oi.order
-                    c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
-                    break
-                end
+            local oi, j = table.childByKeyVal(ordersInfo, "order", lastorder)
+            if oi then
+                lastgrouporder[g] = oi.order
+                c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
             end
         else
             c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(0)
