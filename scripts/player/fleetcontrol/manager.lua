@@ -83,34 +83,13 @@ function initShipUIHandling(player)
 end
 
 
--- called by server on galaxy/sector saving
--- given return values are persisted into galaxy database
-function secure()
-
-    -- return lastCraft
-
-end
-
-
--- called by server on galaxy/sector loading
--- given arguments are persisted return values of secure() function 
-function restore(data)
-
-    -- lastCraft = data
-    
-end
-
-
 function onPlayerLogOff(playerIndex)
 
     debugLog("onPlayerLogOff() -> playerIndex: %s", playerIndex)
 
     local player = Player(playerIndex)
-    local shipidx = player.craftIndex
-
-    removeShipUIScript(shipidx)	
-    if lastCraft and lastCraft ~= shipidx then
-        -- ensure all UI scripts are deattached
+    if lastCraft then 
+        -- ensure UI scripts are deattached
         removeShipUIScript(lastCraft)	
     end
 
@@ -149,9 +128,15 @@ end
 
 function removeShipUIScript(shipidx)
 
+    -- remove scripts(s) from player ship
     if shipidx and shipidx > 0 then
-        -- remove scripts(s) from player ship
-        removeEntityScript(shipidx, fc_script_controlui)
+        local entity = Entity(shipidx)
+        if entity then
+            removeEntityScript(entity, fc_script_controlui)
+            if shipidx == lastCraft then
+                lastCraft = nil
+            end
+        end
     end
     
 end
