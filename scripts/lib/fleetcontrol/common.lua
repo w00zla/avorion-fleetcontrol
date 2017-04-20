@@ -17,9 +17,10 @@ CachedConfig = require("fleetcontrol.cachedconfig")
 
 -- MODINFO
 local modInfo = {  
-    name = "fleetcontrol",
-    version = "0.3",
-    author = "w00zla"
+    name = "FleetControl",
+    author = "w00zla",
+    version = { 0, 4 },
+    clientminversion = { 0, 4 }
 }
 
 -- config
@@ -59,6 +60,20 @@ function getOrdersInfo()
 end
 
 
+function getModInfo()
+    return modInfo
+end
+
+function getVersionString(version)
+    if version then
+        return string.format("v%i.%i", version[1],  version[2])
+    end
+end
+
+function getModInfoLine()
+    return string.format("%s [%s] by %s", modInfo.name, getVersionString(modInfo.version), modInfo.author)
+end
+
 -- attaches script to entity if not already existing
 function ensureEntityScript(entity, entityscript, ...)
     
@@ -88,18 +103,12 @@ function removeEntityScript(entity, entityscript)
 end
 
 
-function getModInfoLine()
-
-    return string.format("%s [v%s] by %s", modInfo.name, modInfo.version, modInfo.author)
-
-end
-
 function scriptLog(player, msg, ...)
 
     if msg and msg ~= "" then 
         local pinfo = ""
         if player then pinfo = " p#" .. tostring(player.index) end
-        local prefix = string.format("SCRIPT %s [v%s]%s => ", modInfo.name, modInfo.version, pinfo)
+        local prefix = string.format("SCRIPT %s [%s]%s => ", modInfo.name, getVersionString(modInfo.version), pinfo)
         printsf(prefix .. msg, ...)
     end
     
@@ -114,7 +123,7 @@ function debugLog(msg, ...)
             local player = Player()
             if player then pinfo = " p#" .. tostring(player.index) end
         end
-        local prefix = string.format("SCRIPT %s [v%s]%s DEBUG => ", modInfo.name, modInfo.version, pinfo)
+        local prefix = string.format("SCRIPT %s [%s]%s DEBUG => ", modInfo.name, getVersionString(modInfo.version), pinfo)
         printsf(prefix .. msg, ...)
     end
     

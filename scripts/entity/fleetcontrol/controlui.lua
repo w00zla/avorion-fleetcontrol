@@ -158,8 +158,6 @@ local hudsubscribed = false
 
 function initialize()
 
-    -- TODO: implement server<->client version check
-
     if onServer() then 
         initServer()
         return 
