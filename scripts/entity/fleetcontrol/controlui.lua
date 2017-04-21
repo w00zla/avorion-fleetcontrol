@@ -18,7 +18,8 @@ require "fleetcontrol.common"
 -- Config
 
 local sconfigdefaults = {
-    updatedelay = 750
+    updatedelay = 750,
+    enablehud = true
 }
 local pconfigdefaults = {
     groups = {

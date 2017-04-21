@@ -32,7 +32,8 @@ fc_script_manager = "data/scripts/player/fleetcontrol/manager.lua"
 fc_script_controlui = "data/scripts/entity/fleetcontrol/controlui.lua"
 av_script_craftorders = "data/scripts/entity/craftorders.lua"
 
--- useful stuff
+-- other stuff
+
 local ordersInfo = {
     { order="Idle", text="Idle", script=av_script_craftorders, func="onIdleButtonPressed"},
     { order="Passive", text="Passive", script=av_script_craftorders, func="onPassiveButtonPressed"},
@@ -43,6 +44,8 @@ local ordersInfo = {
     { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed"},
     { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed"}
 }
+
+local paramtypelabels = { pnum="Number", bool="Boolean" }
 
 
 function enableDebugOutput(enable)
@@ -73,6 +76,45 @@ end
 function getModInfoLine()
     return string.format("%s [%s] by %s", modInfo.name, getVersionString(modInfo.version), modInfo.author)
 end
+
+
+-- validate parameter value based on type
+function validateParameter(paramval, paramtype)
+
+	-- paramvalidate config paramvalues by type
+	if paramval and paramval ~= "" then
+		if paramtype == "pnum" then
+			-- positive number paramvalues
+			local pnum = tonumber(configparamval)
+			if pnum and pnum >= 0 then
+				return pnum
+			end
+		elseif paramtype == "bool" then
+			if paramval:lower() == "true" then
+                paramval = true
+            elseif paramval:lower() == "false" then
+                paramval = false
+            end
+            return paramval
+		end
+		-- generic string param
+		return paramval
+	end
+	
+end
+
+
+-- get nice titles for parameter-types
+function getParamTypeLabel(paramtype)
+
+	local paramtypelabel = paramtype
+	if paramtypelabels[paramtype] then
+		paramtypelabel = paramtypelabels[paramtype]
+	end
+	return paramtypelabel
+	
+end
+
 
 -- attaches script to entity if not already existing
 function ensureEntityScript(entity, entityscript, ...)

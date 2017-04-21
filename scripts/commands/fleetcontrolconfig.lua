@@ -8,14 +8,18 @@ desc:  auto-included script to implement custom command /fleetcontrolconfig
 
 ]]--
 
+package.path = package.path .. ";data/scripts/lib/?.lua"
 
 require "fleetcontrol.common"
+
+
+local modinfo
 
 
 function execute(sender, commandName, ...)
 	local args = {...}	
 	local player = Player(sender)	
-    local modinfo = getModInfo()
+    modinfo = getModInfo()
 	
 	if #args > 0 and args[1] ~= "" then	
 		-- parse command args
@@ -35,30 +39,36 @@ end
 
 function updateConfig(player, configkey, configval)
 
-    local sconfig = getConfig("server", sconfigdefaults)
-
-    local valid = false
+	local valid = false
 	local paramtype = ""
-	local config = configkey
+    local sconfig = getConfig("server", sconfigdefaults)
 	
-	-- if configkey == "galaxy" then
-	-- 	configval = validateParameter(configval, "Name")
-	-- 	if configval then
-	-- 		local datapath = getDefaultDataPath()
-	-- 		if not datapath then
-	-- 			scriptLog(player, "ERROR: unable to determine default datapath!")
-	-- 			player:sendChatMessage("findstation", 0, "Error: unable to determine default datapath!")
-	-- 		end
-	-- 		configkey = "galaxypath"
-	-- 		galaxyname = configval
-	-- 		configval = datapath .. configval .. "/"
-	-- 		if not checkFileExists(configval .. "server.ini") then
-	-- 			player:sendChatMessage("findstation", 0, "Error: Unable to find directory for galaxy '%s'!", galaxyname)
-	-- 			return
-	-- 		end
-	-- 		valid = true
-	-- 	end
-    -- end
+	if configkey == "updatedelay" then
+		paramtype = "pnum"
+		configval = validateParameter(configval, paramtype)
+		if configval then valid = true end
+	if configkey == "enablehud" then
+		paramtype = "bool"
+		configval = validateParameter(configval, paramtype)
+		if configval ~= nil then valid = true end
+	else
+		-- unknown config
+		scriptLog(player, "unknown server configuration (key: %s | val: %s)", configkey, configval)
+		player:sendChatMessage(modinfo.name, 0, "Error: Unknown server configuration '%s'!", configkey)
+		return
+    end
+
+	if valid then
+		-- valid update -> save config
+		sconfig[configkey] = configval		
+		scriptLog(player, "server configuration updated -> key: %s | val: %s", configkey, configval)
+		player:sendChatMessage(modinfo.name, 0, "Server configuration updated successfully")
+	else
+		-- invalid value	
+		local paramtypelabel = getParamTypeLabel(paramtype)
+		scriptLog(player, "invalid server configuration value (key: %s | val: %s | paramtype: %s)", configkey, configval, paramtype)
+		player:sendChatMessage(modinfo.name, 0, "Error: %s parameter required for config '%s'!", paramtypelabel, configkey)
+	end
 
 end
 

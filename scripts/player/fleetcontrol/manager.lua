@@ -141,4 +141,20 @@ function removeShipUIScript(shipidx)
     
 end
 
--- TODO: implement uninstall function (remove all scripts from every entity)
+
+function removeAllScripts()
+
+    local player = Player()
+    local shipidx = player.craftIndex
+
+    --add and remove UI script for ship entities
+    removeShipUIScript(shipidx)
+    if lastCraft and lastCraft ~= shipidx then
+        removeShipUIScript(lastCraft)	
+    end
+
+    -- TODO: remove all scripts from every entity
+
+    -- remove myself
+    terminate()
+end
