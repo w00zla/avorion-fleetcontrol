@@ -22,14 +22,15 @@ local lastCraft
 
 function initialize()
 
-    if onClient() then return end -- only initialize server-side
+    if onClient() then return end -- only init server-side
 
     local sconfig = getConfig("server", sconfigdefaults)
     enableDebugOutput(sconfig.debugoutput) 
 
-    -- server<->client version check
-    requestClientVersion()
-    
+    -- deferred server<->client version check
+    -- (calling invokeClient/invokeServer from initialize just keeps calling the function in current context!)
+    deferredCallback(1, "requestClientVersion")
+ 
 end
 
 
@@ -37,9 +38,12 @@ function requestClientVersion()
 
     if onServer() then
         invokeClientFunction(Player(), "requestClientVersion")
+        return
     end
-
+    
     local cmodinfo = getModInfo()
+    scriptLog(nil, "client mod version requested by server -> %s", getVersionString(cmodinfo.version))
+
     -- send result back to server
     validateClientVersion(cmodinfo.version)
 
@@ -50,6 +54,7 @@ function validateClientVersion(cversion)
 
     if onClient() then
         invokeServerFunction("validateClientVersion", cversion)
+        return
     end
 
     local player = Player(callingPlayer)
@@ -63,9 +68,10 @@ function validateClientVersion(cversion)
         initShipUIHandling(player)
     else
         -- invalid/outdated client version
-        scriptLog(player, "Invalid client mod versions, aborted loading of scripts (server: %s | clientminversion: %s | client: %s)", getVersionString(smodinfo.version), getVersionString(cminversion), getVersionString(cversion))
-        local msg = "Could not load UI due to client-server version mismatch!\nYour version is %s, minimum required version is %s\nPlease update the mod files and restart the game!"
-        player:sendChatMessage(smodinfo.name, 0, string.format(msg, getVersionString(cversion), getVersionString(cminversion)))
+        scriptLog(player, "invalid client mod versions, aborted loading of scripts (server: %s | clientminversion: %s | client: %s)", getVersionString(smodinfo.version), getVersionString(cminversion), getVersionString(cversion))
+        player:sendChatMessage(smodinfo.name, 0, "Could not load UI due to client-server version mismatch!")
+        player:sendChatMessage(smodinfo.name, 0, string.format("Your version is %s, minimum required version is %s", getVersionString(cversion), getVersionString(cminversion)))
+        player:sendChatMessage(smodinfo.name, 0, "Please update the mod files on your client and restart the game!")
     end
 
 end
@@ -98,7 +104,7 @@ end
 
 function onShipChanged(playerIndex, craftIndex)
 
-    debugLog("onShipChanged() -> playerIndex: %s |craftIndex: %s", playerIndex, craftIndex)
+    debugLog("onShipChanged() -> playerIndex: %s | craftIndex: %s", playerIndex, craftIndex)
 
     local player = Player(playerIndex)
     local shipidx = player.craftIndex

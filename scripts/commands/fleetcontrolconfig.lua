@@ -47,7 +47,11 @@ function updateConfig(player, configkey, configval)
 		paramtype = "pnum"
 		configval = validateParameter(configval, paramtype)
 		if configval then valid = true end
-	if configkey == "enablehud" then
+	elseif configkey == "enablehud" then
+		paramtype = "bool"
+		configval = validateParameter(configval, paramtype)
+		if configval ~= nil then valid = true end
+	elseif configkey == "debugoutput" then
 		paramtype = "bool"
 		configval = validateParameter(configval, paramtype)
 		if configval ~= nil then valid = true end

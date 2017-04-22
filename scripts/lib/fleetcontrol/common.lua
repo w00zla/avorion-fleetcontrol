@@ -49,7 +49,7 @@ local paramtypelabels = { pnum="Number", bool="Boolean" }
 
 
 function enableDebugOutput(enable)
-    debugoutput = enable or true
+    debugoutput = enable or false
 end
 
 

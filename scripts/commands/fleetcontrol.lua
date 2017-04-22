@@ -22,8 +22,8 @@ function execute(sender, commandName, ...)
 	
 		-- make sure entity scripts are present
 		ensureEntityScript(player, fc_script_manager)
-		scriptLog(player, "manager script was attached to player entity")
-		player:sendChatMessage(modinfo.name, 0, "'Fleet Control' UI enabled")
+		scriptLog(player, "UI was enabled  -> manager script attached to player")
+		player:sendChatMessage(modinfo.name, 0, "'Fleet Control' UI was enabled")
 		
 	elseif args[1] == "disable" then
 		
@@ -31,7 +31,7 @@ function execute(sender, commandName, ...)
 			player:invokeFunction(fc_script_manager, "removeAllScripts")		
 			scriptLog(player, "all scripts have been removed")
 		end			
-		player:sendChatMessage(modinfo.name, 0, "'Fleet Control' UI disabled")
+		player:sendChatMessage(modinfo.name, 0, "'Fleet Control' UI was disabled")
 		
 	else
 		player:sendChatMessage(modinfo.name, 0, "Missing parameters! Use '/help fleetcontrol' for information.")

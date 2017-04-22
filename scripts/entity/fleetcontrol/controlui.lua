@@ -45,7 +45,7 @@ local pconfigdefaults = {
             }    
         },
     hud = {
-            enablehud = false
+            showhud = false
         },
     knownships = {},
     shipgroups = { {},{},{},{} }
@@ -119,7 +119,8 @@ local c_conf = {
         btnHudColorPick = {}
     },
     hud = {
-        chkEnableHud = nil
+        chkShowHud = nil,
+        lblHudNotice = nil
     }
 }
 
@@ -175,8 +176,16 @@ function initServer()
     local sconfig = getConfig("server", sconfigdefaults)
     enableDebugOutput(sconfig.debugoutput)
 
-    svals = { updatedelay=sconfig.updatedelay, debugoutput=sconfig.debugoutput }   
-    syncServerValues(svals)
+    -- TODO: also update server config while running, i.e. on window show or timed...
+    -- send server config values to client
+    svals = { 
+        updatedelay = sconfig.updatedelay, 
+        debugoutput = sconfig.debugoutput,  
+        enablehud = sconfig.enablehud
+    }   
+
+    deferredCallback(1, "syncServerValues", svals)
+    -- syncServerValues(svals)
 
 end
 
@@ -196,7 +205,7 @@ function initClient()
     shipgroups = pconfig.shipgroups
     knownships = pconfig.knownships    
 
-    -- if hudconfig.enablehud then
+    -- if hudconfig.showhud then
     --     subscribeHudCallbacks()
     -- end
 
@@ -207,27 +216,14 @@ function syncServerValues(svalues)
 
     if onServer() then
         invokeClientFunction(Player(), "syncServerValues", svalues)
+        return
     end
 
     svals = svalues
     enableDebugOutput(svals.debugoutput)
 
-    -- debugLog("syncServerValues() -> svals:")
-    -- debugLog(printTable(svals))
-
-end
-
-
-function secure()
-
-    -- return shipinfos
-
-end
-
-
-function restore(data)
-
-    -- shipinfos = data
+    debugLog("syncServerValues() -> svals:")
+    debugLog(printTable(svals))
 
 end
 
@@ -242,23 +238,23 @@ function interactionPossible(player)
 end
 
 
-function subscribeHudCallbacks()
+-- function subscribeHudCallbacks()
 
-    if not hudsubscribed then
-        Sector():registerCallback("onPreRenderHud", "onPreRenderHud")
-        hudsubscribed = true
-    end
-    debugLog("subscribeHudCallbacks()")
+--     if not hudsubscribed then
+--         Sector():registerCallback("onPreRenderHud", "onPreRenderHud")
+--         hudsubscribed = true
+--     end
+--     debugLog("subscribeHudCallbacks()")
 
-end
+-- end
 
-function unsubscribeHudCallbacks()
+-- function unsubscribeHudCallbacks()
 
-    Sector():unregisterCallback("onPreRenderHud", "onPreRenderHud")
-    hudsubscribed = false
-    debugLog("unsubscribeHudCallbacks()")
+--     Sector():unregisterCallback("onPreRenderHud", "onPreRenderHud")
+--     hudsubscribed = false
+--     debugLog("unsubscribeHudCallbacks()")
 
-end
+-- end
 
 
 function onShowWindow()
@@ -637,7 +633,10 @@ function buildConfigUI(parent)
 
     -- local sgrp1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 3)
 
-    c_conf.hud.chkEnableHud = c_conf.cntCatHUD:createCheckBox(Rect(10, 70, 200, 85), "Enable HUD Display", "onEnableHudChecked")
+    c_conf.hud.chkShowHud = c_conf.cntCatHUD:createCheckBox(Rect(10, 70, 200, 85), "Enable HUD Display", "onShowHudChecked")
+    c_conf.hud.lblHudNotice = c_conf.cntCatHUD:createLabel(vec2(10, 75), "HUD display is disabled on this server", 14)
+    c_conf.hud.lblHudNotice.color = ColorRGB(1, 0, 0)
+    c_conf.hud.lblHudNotice:hide()
       
     c_conf.lstCategories:select(0)
     c_conf.cntCatHUD:hide()
@@ -939,13 +938,13 @@ function onPickHudColorCallback(result, color, param)
 end
 
 
-function onEnableHudChecked()
+function onShowHudChecked()
 
     -- update config and save
-    hudconfig.enablehud = c_conf.hud.chkEnableHud.checked
+    hudconfig.showhud = c_conf.hud.chkShowHud.checked
     pconfig.hud = hudconfig
 
-    -- if hudconfig.enablehud then
+    -- if hudconfig.showhud then
     --     subscribeHudCallbacks()
     -- else
     --     unsubscribeHudCallbacks()
@@ -1238,7 +1237,16 @@ end
 
 function refreshConfigUIHud()
 
-    c_conf.hud.chkEnableHud.checked = hudconfig.enablehud
+    c_conf.hud.chkShowHud.checked = hudconfig.showhud
+
+    if not svals.enablehud then
+        -- TODO: disable all HUD config widgets
+        c_conf.hud.chkShowHud:hide()
+        c_conf.hud.lblHudNotice:show()
+    else
+        c_conf.hud.lblHudNotice:hide()
+        c_conf.hud.chkShowHud:show()
+    end
 
 end
 
@@ -1393,7 +1401,7 @@ function updateClient(timeStep)
     end
 
     -- draw HUD elements if enabled
-    if hudconfig.enablehud then
+    if svals.enablehud and hudconfig.showhud then
         drawHud()
     end
 

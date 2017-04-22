@@ -80,7 +80,7 @@ local function loadValue(config, scope, index, prefix, defaults)
     -- load value from target's storage 
     local val = target:getValue(storagekey)
        
-    if val then    
+    if val ~= nil then    
         if type(val) == "string" then
             -- parse JSON string for LUA variables
             val = json.parse(val)
@@ -104,7 +104,12 @@ local function saveValue(scope, index, prefix, config, value)
     end
 
     if value then 
-        value = json.stringify(value)
+        local numval = tonumber(value)
+        if numval then
+            value = numval
+        else
+            value = json.stringify(value)
+        end
     end
 
     -- save value to target storage via server-side call (required!)
