@@ -124,34 +124,45 @@ local hudsubscribed = false
 function initialize()
 
     if onServer() then 
+        -- SERVER
         local sconfig = getConfig("server", sconfigdefaults)
         enableDebugOutput(sconfig.debugoutput)
         return 
     end
 
-    initClient()
+    -- CLIENT
+
+    -- initial debug options
+    svals = getServerConfigDefaults()
+    enableDebugOutput(svals.debugoutput)
+
+    ordersInfo = getOrdersInfo()
+
+    -- load player config values
+    loadPlayerConfig()
+
+     -- if hudconfig.showhud then
+    --     subscribeHudCallbacks()
+    -- end
 
 end
 
 
-function initClient()
+function loadPlayerConfig()
 
-    svals = getServerConfigDefaults()
-    enableDebugOutput(svals.debugoutput)
-
-    -- load config and dynamic data
+    if onServer() then
+        invokeClientFunction(Player(), "loadPlayerConfig")
+        return
+    end
+ 
     pconfig = getConfig("player", getPlayerConfigDefaults())
-    ordersInfo = getOrdersInfo()
 
-    -- init runtime configs
     groupconfig = pconfig.groups
     hudconfig = pconfig.hud
     shipgroups = pconfig.shipgroups
     knownships = pconfig.knownships    
 
-    -- if hudconfig.showhud then
-    --     subscribeHudCallbacks()
-    -- end
+    debugLog("loadPlayerConfig() -> complete")
 
 end
 
@@ -487,6 +498,9 @@ function buildConfigUI(parent)
     --------------------
     -- "General" category:
     -- # close window on "look at" click if ship in sector
+    -- # select orders tab on window open
+    -- # always select first page on orders tab
+    -- # (sounds?)
     --
     -- "HUD" category:
     -- # enable/disable certain info output and various styles (vert/horz listing etc)
@@ -1067,7 +1081,7 @@ function displayShipState(g, s, ship, currloc)
     c_ord.ships.lblState[g][s]:show()
 
     -- location/sector of ship
-    if ship.location then 
+    if ship.location and ship.state ~= "Player" then 
         local loc = vec2(ship.location.x, ship.location.y)
         if  loc.x == currloc.x and loc.y == currloc.y then
             c_ord.ships.lblLoc[g][s].caption = "current"

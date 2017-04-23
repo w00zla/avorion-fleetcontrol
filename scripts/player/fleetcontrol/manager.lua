@@ -91,13 +91,6 @@ function initShipUIHandling(player)
 end
 
 
-function onSectorEntered(playerIndex, x, y) 
-
-    updateSectorPlayerShips()
-
-end
-
-
 function onPlayerLogOff(playerIndex)
 
     debugLog("onPlayerLogOff() -> playerIndex: %s", playerIndex)
@@ -129,7 +122,16 @@ end
 
 function onDestroyed(index, lastDamageInflictor) 
 
+    debugLog("onDestroyed()")
     removePlayerShip(index)
+
+end
+
+
+function onSectorEntered(playerIndex, x, y) 
+
+    Sector():registerCallback("onDestroyed", "onDestroyed")
+    updateSectorPlayerShips()
 
 end
 
@@ -221,7 +223,12 @@ function removePlayerShip(index)
             -- debugLog("onDestroyed() -> shipgroups:")
             -- debugLog(printTable(shipgroups))
             
-            scriptLog(Player(), "player ship '%s' was destroyed -> known and group ships were updated", entity.name)
+            -- force update of config values in UI script
+            local pc = Entity(lastCraft)
+            if pc and valid(pc) then
+                pc:invokeFunction(fc_script_controlui, "loadPlayerConfig")
+            end
+            scriptLog(Player(), "player ship '%s' was destroyed -> known and group ships were updated", entity.name)       
         end
     end
 
@@ -267,6 +274,10 @@ function updateSectorPlayerShips()
             scriptLog(Player(), "player ship '%s' was expected but not found in sector!", ship.name)
         end
         pconfig.knownships = knownships
+        local pc = Entity(lastCraft)
+        if pc and valid(pc) then
+            pc:invokeFunction(fc_script_controlui, "loadPlayerConfig")
+        end
         scriptLog(Player(), "player known and group ships were updated")
     end
 
