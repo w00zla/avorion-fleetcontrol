@@ -74,6 +74,8 @@ function updateConfig(player, configkey, configval)
 		player:sendChatMessage(modinfo.name, 0, "Error: %s parameter required for config '%s'!", paramtypelabel, configkey)
 	end
 
+	-- TODO: update server config for all manager/ui instances!
+
 end
 
 

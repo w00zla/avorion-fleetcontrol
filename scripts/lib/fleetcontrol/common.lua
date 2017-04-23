@@ -27,6 +27,40 @@ local modInfo = {
 local debugoutput = false
 local configprefix = "fleetcontrol_"
 
+local sconfigdefaults = {
+    updatedelay = 750,
+    enablehud = true
+}
+local pconfigdefaults = {
+    groups = {
+            {
+                name="Group 1",
+                showhud=false,
+                hudcolor={a=0.5,r=1,g=1,b=1}
+            },
+            {
+                name="Group 2",
+                showhud=false,
+                hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
+            },
+            {
+                name="Group 3",
+                showhud=false,
+                hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
+            },
+            {
+                name="Group 4",
+                showhud=false,
+                hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
+            }    
+        },
+    hud = {
+            showhud = false
+        },
+    knownships = {},
+    shipgroups = { {},{},{},{} }
+}
+
 -- globals
 fc_script_manager = "data/scripts/player/fleetcontrol/manager.lua"
 fc_script_controlui = "data/scripts/entity/fleetcontrol/controlui.lua"
@@ -45,6 +79,22 @@ local ordersInfo = {
     { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed"}
 }
 
+local stateColors = {
+    None = {r=1,g=1,b=1},
+    Idle = {r=0.3,g=0.3,b=0.3},
+    Patrol = {r=0.6,g=0.7,b=0.9},
+    Escort = {r=0.9,g=0.9,b=0},
+    Aggressive = {r=0.9,g=0.5,b=0.2},
+    Passive = {r=0.5,g=0.5,b=0.5},
+    Guard = {r=0.2,g=0.4,b=0.8},
+    Jump = {r=0.5,g=0.4,b=0.7},
+    Fly = {r=0.6,g=0.3,b=0.4},
+    Attack = {r=0.9,g=0.7,b=0.4},
+    Follow = {r=0.8,g=0.9,b=0.1},
+    Player = {r=0.4,g=0.8,b=0.3},
+    NoCaptain = {r=0.75,g=0.15,b=0.1}
+}
+
 local paramtypelabels = { pnum="Number", bool="Boolean" }
 
 
@@ -57,9 +107,32 @@ function getConfig(scope, defaults)
     return CachedConfig(configprefix, defaults, scope)
 end
 
+function getServerConfigDefaults()
+    return sconfigdefaults
+end
+
+function getPlayerConfigDefaults()
+    return pconfigdefaults
+end
 
 function getOrdersInfo()
     return ordersInfo
+end
+
+
+function getStateColors()
+    return stateColors
+end
+
+function getShipStateColor(state)
+
+    if state and stateColors[state] then
+        local cvals = stateColors[state]
+        return ColorRGB(cvals.r, cvals.g, cvals.b)
+    else
+        return ColorRGB(1,1,1) -- white as default color
+    end
+
 end
 
 

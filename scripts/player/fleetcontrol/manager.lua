@@ -81,10 +81,19 @@ function initShipUIHandling(player)
 
     -- subscribe to event callbacks
     player:registerCallback("onShipChanged", "onShipChanged")	
+    player:registerCallback("onSectorEntered", "onSectorEntered")
+    Sector():registerCallback("onDestroyed", "onDestroyed")
     Server():registerCallback("onPlayerLogOff", "onPlayerLogOff")
 
     -- add UI script
     addShipUIScript(player.craftIndex) 
+
+end
+
+
+function onSectorEntered(playerIndex, x, y) 
+
+    updateSectorPlayerShips()
 
 end
 
@@ -118,6 +127,13 @@ function onShipChanged(playerIndex, craftIndex)
 end
 
 
+function onDestroyed(index, lastDamageInflictor) 
+
+    removePlayerShip(index)
+
+end
+
+
 function addShipUIScript(shipidx)
 
     -- add script to ship entity
@@ -125,7 +141,16 @@ function addShipUIScript(shipidx)
         local entity = Entity(shipidx)
         if entity then
             ensureEntityScript(entity, fc_script_controlui)
-            lastCraft = entity.index	
+            lastCraft = entity.index
+
+            -- push server config values to client UI script
+            local sconfig = getConfig("server", getServerConfigDefaults())
+            local svalues = { 
+                updatedelay = sconfig.updatedelay, 
+                debugoutput = sconfig.debugoutput,  
+                enablehud = sconfig.enablehud
+            }
+            entity:invokeFunction(fc_script_controlui, "syncServerValues", svalues)
         end
     end
 
@@ -163,4 +188,86 @@ function removeAllScripts()
 
     -- remove myself
     terminate()
+end
+
+
+function removePlayerShip(index)
+
+    local entity = Entity(index)
+    if entity then
+        -- get config values to update
+        local pconfig = getConfig("player", getPlayerConfigDefaults())
+        local knownships = pconfig.knownships
+        local shipgroups = pconfig.shipgroups
+        
+        local ship, idx = table.childByKeyVal(knownships, "name", entity.name)
+        if ship then
+            -- remove ship(s) from knownships
+            table.remove(knownships, idx)
+            -- remove ship from assigned group
+            for g, grp in pairs(shipgroups) do 
+                for s, shp in pairs(grp) do
+                    if shp == entity.name then
+                        table.remove(shipgroups[g], s)
+                        break
+                    end
+                end
+            end
+            -- update configs
+            pconfig.knownships = knownships
+            -- debugLog("onDestroyed() -> knownships:")
+            -- debugLog(printTable(knownships))
+            pconfig.shipgroups = shipgroups
+            -- debugLog("onDestroyed() -> shipgroups:")
+            -- debugLog(printTable(shipgroups))
+            
+            scriptLog(Player(), "player ship '%s' was destroyed -> known and group ships were updated", entity.name)
+        end
+    end
+
+end
+
+
+function updateSectorPlayerShips()
+
+    local pconfig = getConfig("player", getPlayerConfigDefaults())
+    local knownships = pconfig.knownships
+
+    -- get all exisiting ships of player in current sector
+    local sectorships = getPlayerCrafts()
+
+    local cx, cy = Sector():getCoordinates()
+    local coords = {x=cx, y=cy}
+
+    -- remove known ship if not encountered in last saved location/sector
+    -- (this is a workaround until ships can report back their location properly)
+    local delidx = {}
+    for i, s in pairs(knownships) do
+        if s.location.x == coords.x and s.location.y == coords.y then
+            local ship = table.childByKeyVal(sectorships, "name", s.name)
+            if not ship then
+                table.insert(delidx, i)    
+                -- remove ship from assigned group
+                for gi, grp in pairs(shipgroups) do 
+                    for si, shp in pairs(grp) do
+                        if shp == s.name then
+                            table.remove(shipgroups[gi], si)
+                            break
+                        end
+                    end
+                end
+            end
+        end      
+    end
+    if #delidx > 0 then
+        -- remove ship(s) from knownships
+        for _, idx in pairs(delidx) do
+            local ship = knownships[idx]
+            table.remove(knownships, idx)        
+            scriptLog(Player(), "player ship '%s' was expected but not found in sector!", ship.name)
+        end
+        pconfig.knownships = knownships
+        scriptLog(Player(), "player known and group ships were updated")
+    end
+
 end

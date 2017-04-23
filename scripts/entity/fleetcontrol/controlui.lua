@@ -15,44 +15,7 @@ require "stringutility"
 
 require "fleetcontrol.common"
 
--- Config
-
-local sconfigdefaults = {
-    updatedelay = 750,
-    enablehud = true
-}
-local pconfigdefaults = {
-    groups = {
-            {
-                name="Group 1",
-                showhud=false,
-                hudcolor={a=0.5,r=1,g=1,b=1}
-            },
-            {
-                name="Group 2",
-                showhud=false,
-                hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
-            },
-            {
-                name="Group 3",
-                showhud=false,
-                hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
-            },
-            {
-                name="Group 4",
-                showhud=false,
-                hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
-            }    
-        },
-    hud = {
-            showhud = false
-        },
-    knownships = {},
-    shipgroups = { {},{},{},{} }
-}
-
--- UI vars
-
+-- UI widget collections
 local mywindow
 local textdialog = {
     window = nil,
@@ -124,24 +87,12 @@ local c_conf = {
     }
 }
 
--- limits
+--  UI limits
 local ordergroupslimit = 2
 local groupshiplimit = 6
 local groupnamelimit = 18
 
--- configs
-local pconfig
-local svals
-local ordersInfo
-local groupconfig
-local hudconfig
-local shipgroups
-
--- runtime data
-local shipinfos -- server&client
-local knownships
-
--- widget indices
+-- UI widget indices
 local shipPoolLastIndex
 local configCatsLastIndex
 local groupListsLastIndices = {}
@@ -150,7 +101,19 @@ local selectedtabidx
 local lastshiporder = {}
 local lastgrouporder = {}
 
--- runtime flags and timestamps
+-- client config buffers
+local pconfig
+local svals
+local ordersInfo
+local groupconfig
+local hudconfig
+local shipgroups
+
+-- client runtime data
+local shipinfos
+local knownships
+
+-- client flags and timestamps
 local uivisible = false
 local doupdatestates = false
 local laststateupdate = 0
@@ -161,7 +124,8 @@ local hudsubscribed = false
 function initialize()
 
     if onServer() then 
-        initServer()
+        local sconfig = getConfig("server", sconfigdefaults)
+        enableDebugOutput(sconfig.debugoutput)
         return 
     end
 
@@ -170,33 +134,13 @@ function initialize()
 end
 
 
-function initServer()
-
-    -- load server config and pass to client
-    local sconfig = getConfig("server", sconfigdefaults)
-    enableDebugOutput(sconfig.debugoutput)
-
-    -- TODO: also update server config while running, i.e. on window show or timed...
-    -- send server config values to client
-    svals = { 
-        updatedelay = sconfig.updatedelay, 
-        debugoutput = sconfig.debugoutput,  
-        enablehud = sconfig.enablehud
-    }   
-
-    deferredCallback(1, "syncServerValues", svals)
-    -- syncServerValues(svals)
-
-end
-
-
 function initClient()
 
-    svals = sconfigdefaults
+    svals = getServerConfigDefaults()
     enableDebugOutput(svals.debugoutput)
 
     -- load config and dynamic data
-    pconfig = getConfig("player", pconfigdefaults)
+    pconfig = getConfig("player", getPlayerConfigDefaults())
     ordersInfo = getOrdersInfo()
 
     -- init runtime configs
@@ -258,8 +202,6 @@ end
 
 
 function onShowWindow()
-
-    debugLog("onShowWindow()")
 
     -- pre-select orders tab everytime window is opened
     tabs.window:selectTab(tabs.orders)
@@ -516,9 +458,9 @@ function buildGroupsUI(parent)
         local grpinfo = parent:createLabel(vec2(split_grp4.bottom.lower.x + (split_grp4.bottom.size.x/2) - 25, split_grp4.bottom.lower.y + 5), "", 12)
 
         grplbl.bold = true
-        cappool.color = ColorARGB(0.5, 0, 0.3, 1)   
-        nrlbl.color = ColorARGB(0.5, 0.2, 0.2, 0.2)     
-        grpinfo.color = ColorARGB(0.5, 0.2, 0.2, 0.2)
+        cappool.color = ColorRGB(0, 0.3, 1)   
+        nrlbl.color = ColorRGB(0.2, 0.2, 0.2)     
+        grpinfo.color = ColorRGB(0.2, 0.2, 0.2)
         shipassign.textSize = 18  
         shipunassign.textSize = 18  
         shipassign.active = false
@@ -565,7 +507,7 @@ function buildConfigUI(parent)
 
     -- option categories list
     local catlbl = parent:createLabel(vec2(split2.top.lower.x, split2.top.lower.y + 4), "Categories:", 12)
-    catlbl.color = ColorARGB(0.5, 0.8, 0.4, 0.2)  
+    catlbl.color = ColorRGB(0.8, 0.4, 0.2)  
     catlbl.italic = true
     c_conf.lstCategories = parent:createListBox(split2.bottom)
 
@@ -612,7 +554,7 @@ function buildConfigUI(parent)
         hudcolorpic.tooltip = "Choose HUD color"
        
         nrlbl.color = ColorRGB(0.2, 0.2, 0.2)
-        hudcolorprev.color = ColorARGB(0.5, 1, 1, 1)
+        hudcolorprev.color = ColorARGB(0, 0, 0, 0)
 
         c_conf.groups.lblName[g] = namelbl
         c_conf.groups.btnRename[g] = renbtn
@@ -751,7 +693,7 @@ function onGroupOrderSelected(sender)
 
     -- issue orders to all group ships excluding player driven ships
     for i, info in pairs(shipinfos[grp]) do
-        if info.index ~= pshipIndex and info.hascaptain then
+        if info.index ~= pshipIndex and info.state ~= "NoCaptain" then
             indices[i] = info.index
         end
 	end
@@ -1109,18 +1051,19 @@ function displayShipState(g, s, ship, currloc)
     c_ord.ships.lblName[g][s].caption = ship.name
     c_ord.ships.lblName[g][s]:show()
 
-    -- TODO: colors for states =)
     if ship.elsewhere then
         c_ord.ships.lblState[g][s].caption = "-"
-    elseif ship.isplayer then
-        c_ord.ships.lblState[g][s].caption = "Player"
-    elseif not ship.hascaptain then
-        c_ord.ships.lblState[g][s].caption = "No Captain"
     else
-        c_ord.ships.lblState[g][s].caption = ship.aistate or "-"
+        local statetxt = "-"
+        if ship.state == "NoCaptain" then
+            statetxt = "No Captain"
+        elseif ship.state then
+            statetxt = ship.state
+        end
+        c_ord.ships.lblState[g][s].caption = statetxt
     end
-    c_ord.ships.lblState[g][s].bold = ship.isplayer or false
-    --c_ord.ships.lblState[g][s].italic = (not ship.hascaptain)
+    c_ord.ships.lblState[g][s].color = getShipStateColor(ship.state)
+    c_ord.ships.lblState[g][s].bold = (ship.state == "Player")
     c_ord.ships.lblState[g][s]:show()
 
     -- location/sector of ship
@@ -1137,17 +1080,15 @@ function displayShipState(g, s, ship, currloc)
         c_ord.ships.btnLook[g][s]:show() 
     end
    
-    if not ship.elsewhere and not ship.isplayer then
-        if ship.hascaptain then
-            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
-            c_ord.ships.cmdOrder[g][s]:show()
-            if ship.order then
-                -- set selected order to ship's current order
-                local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
-                if oi then
-                    lastshiporder[ship.name] = oi.order
-                    c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
-                end
+    if not ship.elsewhere and ship.state ~= "Player" and ship.state ~= "NoCaptain" then
+        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
+        c_ord.ships.cmdOrder[g][s]:show()
+        if ship.order then
+            -- set selected order to ship's current order
+            local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
+            if oi then
+                lastshiporder[ship.name] = oi.order
+                c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
             end
         end
     end
@@ -1220,6 +1161,23 @@ function refreshGroupNames()
         c_conf.groups.lblName[g].caption = groupconfig[g].name      
     end
     
+end
+
+
+function refreshConfigUICategory()
+
+    -- show selected options category widgets
+    if c_conf.lstCategories.selected ~= configCatsLastIndex then  
+        configCatsLastIndex = c_conf.lstCategories.selected
+        if configCatsLastIndex == 0 then
+            c_conf.cntCatHUD:hide()
+            c_conf.cntCatGroups:show()
+        elseif configCatsLastIndex == 1 then
+            c_conf.cntCatGroups:hide()
+            c_conf.cntCatHUD:show()
+        end        
+    end
+
 end
 
 
@@ -1328,24 +1286,9 @@ end
 function updateUI()
 
     if selectedtabidx == tabs.groups.index then
-
         refreshGroupsUIButtons()
-
     elseif selectedtabidx == tabs.config.index then
-
-        -- CONFIG
-        -- show selected options category widgets
-        if c_conf.lstCategories.selected ~= configCatsLastIndex then  
-            configCatsLastIndex = c_conf.lstCategories.selected
-            if configCatsLastIndex == 0 then
-                c_conf.cntCatHUD:hide()
-                c_conf.cntCatGroups:show()
-            elseif configCatsLastIndex == 1 then
-                c_conf.cntCatGroups:hide()
-                c_conf.cntCatHUD:show()
-            end        
-        end
-
+        refreshConfigUICategory()
     end
 
 end
@@ -1357,18 +1300,19 @@ function updateClient(timeStep)
 
         local current = systemTimeMs()
         -- only do update if configured delay has passed
-        if (current - laststateupdate) >= svals.updatedelay then
+        if svals.updatedelay and (current - laststateupdate) >= svals.updatedelay then
 
             -- get all exisiting ships of player in current sector
             local sectorships = getPlayerCrafts()
-
-            -- TODO: add ship entity scripts here!!
 
             local cx, cy = Sector():getCoordinates()
             local coords = {x=cx, y=cy}          
             
             local knownshipsupdate = false
             for _, s in pairs(sectorships) do 
+
+                -- TODO: add ship entity scripts here!!
+
                 local ship, idx = table.childByKeyVal(knownships, "name", s.name)
                 if not ship then
                     debugLog("updateClient() -> new known ship '%s'", s.name)
@@ -1408,12 +1352,12 @@ function updateClient(timeStep)
 end
 
 
-function onPreRenderHud()
+-- function onPreRenderHud()
 
-    debugLog("onPreRenderHud()")
-    --drawText("TEST", 10, 500, ColorARGB(0.5, 1, 1, 1), 16, false, false, 0)
+--     debugLog("onPreRenderHud()")
+--     --drawText("TEST", 10, 500, ColorARGB(0.5, 1, 1, 1), 16, false, false, 0)
 
-end
+-- end
 
 
 function drawHud()
@@ -1492,27 +1436,21 @@ function updateShipStates(groups, ships)
         if table.contains(updateships, ship.name) then
             local entity = Entity(ship.index)
             if entity and entity.isShip and entity.name == ship.name then
+                local state, order
                 -- TODO: check also if ship is controlled by another player
                 if entity.index == pshipIndex then
-                    table.insert(statedata, {
-                        name = entity.name,
-                        index = entity.index,
-                        isplayer = true
-                    })
+                    state = "Player"
+                elseif checkShipCaptain(entity) then
+                    state, order = getShipAIOrderState(entity) 
                 else
-                    local hascaptain = checkShipCaptain(entity)
-                    local aistate, order
-                    if hascaptain then
-                        aistate, order = getShipAIOrderState(entity) 
-                    end
-                    table.insert(statedata, {
-                        name = entity.name,
-                        index = entity.index,
-                        aistate = aistate,
-                        order = order,
-                        hascaptain = hascaptain
-                    })
+                    state = "NoCaptain"
                 end
+                table.insert(statedata, {
+                    name = entity.name,
+                    index = entity.index,
+                    state = state,
+                    order = order
+                })
             end
         end
     end    
