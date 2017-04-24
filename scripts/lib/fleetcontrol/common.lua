@@ -55,7 +55,8 @@ local pconfigdefaults = {
             }    
         },
     hud = {
-            showhud = false
+            showhud = false,
+            hudanchor = {x=10,y=200}
         },
     knownships = {},
     shipgroups = { {},{},{},{} }
@@ -69,30 +70,28 @@ av_script_craftorders = "data/scripts/entity/craftorders.lua"
 -- other stuff
 
 local ordersInfo = {
-    { order="Idle", text="Idle", script=av_script_craftorders, func="onIdleButtonPressed"},
-    { order="Passive", text="Passive", script=av_script_craftorders, func="onPassiveButtonPressed"},
-    { order="Guard", text="Guard Position", script=av_script_craftorders, func="onGuardButtonPressed"},
-    { order="Patrol", text="Patrol Sector", script=av_script_craftorders, func="onPatrolButtonPressed"},
-    { order="Escort", text="Escort Me", script=av_script_craftorders, func="onEscortMeButtonPressed", param="playercraftindex"},
-    { order="Attack", text="Attack Enemies", script=av_script_craftorders, func="onAttackEnemiesButtonPressed"},
-    { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed"},
-    { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed"}
+    { order="Idle", text="Idle", script=av_script_craftorders, func="onIdleButtonPressed" },
+    { order="Passive", text="Passive", script=av_script_craftorders, func="onPassiveButtonPressed" },
+    { order="Guard", text="Guard Position", script=av_script_craftorders, func="onGuardButtonPressed" },
+    { order="Patrol", text="Patrol Sector", script=av_script_craftorders, func="onPatrolButtonPressed" },
+    { order="Escort", text="Escort Me", script=av_script_craftorders, func="onEscortMeButtonPressed", param="playercraftindex" },
+    { order="Attack", text="Attack Enemies", script=av_script_craftorders, func="onAttackEnemiesButtonPressed" },
+    { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed" },
+    { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed" }
 }
 
-local stateColors = {
-    None = {r=1,g=1,b=1},
-    Idle = {r=0.3,g=0.3,b=0.3},
-    Patrol = {r=0.6,g=0.7,b=0.9},
-    Escort = {r=0.9,g=0.9,b=0},
-    Aggressive = {r=0.9,g=0.5,b=0.2},
-    Passive = {r=0.5,g=0.5,b=0.5},
-    Guard = {r=0.2,g=0.4,b=0.8},
-    Jump = {r=0.5,g=0.4,b=0.7},
-    Fly = {r=0.6,g=0.3,b=0.4},
-    Attack = {r=0.9,g=0.7,b=0.4},
-    Follow = {r=0.8,g=0.9,b=0.1},
-    Player = {r=0.4,g=0.8,b=0.3},
-    NoCaptain = {r=0.75,g=0.15,b=0.1}
+local statesInfo = {
+    { state="None", text="None", color={r=1,g=1,b=1} },
+    { state="Idle", text="Idle", color={r=0.3,g=0.3,b=0.3} },
+    { state="Patrol", text="Patrol", color={r=0.6,g=0.7,b=0.9} },
+    { state="Escort", text="Escort", color={r=0.9,g=0.9,b=0} },
+    { state="Aggressive", text="Aggressive", color={r=0.9,g=0.5,b=0.2} },
+    { state="Passive", text="Passive", color={r=0.5,g=0.5,b=0.5} },
+    { state="Guard", text="Guard", color={r=0.2,g=0.4,b=0.8} },
+    { state="Jump", text="Jump", color={r=0.5,g=0.4,b=0.7} },
+    { state="Fly", text="Fly", color={r=0.6,g=0.3,b=0.4} },
+    { state="Attack", text="Attack", color={r=0.9,g=0.7,b=0.4} },
+    { state="Follow", text="Follow", color={r=0.8,g=0.9,b=0.1} }
 }
 
 local paramtypelabels = { pnum="Number", bool="Boolean" }
@@ -115,24 +114,13 @@ function getPlayerConfigDefaults()
     return pconfigdefaults
 end
 
+
 function getOrdersInfo()
     return ordersInfo
 end
 
-
-function getStateColors()
-    return stateColors
-end
-
-function getShipStateColor(state)
-
-    if state and stateColors[state] then
-        local cvals = stateColors[state]
-        return ColorRGB(cvals.r, cvals.g, cvals.b)
-    else
-        return ColorRGB(1,1,1) -- white as default color
-    end
-
+function getStatesInfo()
+    return statesInfo
 end
 
 
@@ -150,6 +138,17 @@ function getModInfoLine()
     return string.format("%s [%s] by %s", modInfo.name, getVersionString(modInfo.version), modInfo.author)
 end
 
+
+function shortenText(text, maxlen)
+
+    if text then
+        if string.len(text) > maxlen then
+            text = string.sub(text, 1, maxlen - 2) .. "..."
+        end
+    end
+    return text
+
+end
 
 -- validate parameter value based on type
 function validateParameter(paramval, paramtype)

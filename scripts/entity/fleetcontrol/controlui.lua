@@ -54,6 +54,7 @@ local c_ord = {
         lblLoc = {},
         btnLook = {},
         cmdOrder = {},
+        lblOrder = {},
     }
 }
 
@@ -91,6 +92,7 @@ local c_conf = {
 local ordergroupslimit = 2
 local groupshiplimit = 6
 local groupnamelimit = 18
+local hudnamemax = 20
 
 -- UI widget indices
 local shipPoolLastIndex
@@ -105,6 +107,7 @@ local lastgrouporder = {}
 local pconfig
 local svals
 local ordersInfo
+local statesInfo
 local groupconfig
 local hudconfig
 local shipgroups
@@ -137,13 +140,15 @@ function initialize()
     enableDebugOutput(svals.debugoutput)
 
     ordersInfo = getOrdersInfo()
+    statesInfo = getStatesInfo()
 
     -- load player config values
     loadPlayerConfig()
 
-     -- if hudconfig.showhud then
-    --     subscribeHudCallbacks()
-    -- end
+    if hudconfig.showhud then
+        subscribeHudCallbacks()
+        doupdatestates = true
+    end
 
 end
 
@@ -193,28 +198,29 @@ function interactionPossible(player)
 end
 
 
--- function subscribeHudCallbacks()
+function subscribeHudCallbacks()
 
---     if not hudsubscribed then
---         Sector():registerCallback("onPreRenderHud", "onPreRenderHud")
---         hudsubscribed = true
---     end
---     debugLog("subscribeHudCallbacks()")
+    if not hudsubscribed then
+        Player():registerCallback("onPreRenderHud", "onPreRenderHud")
+        hudsubscribed = true
+    end
+    debugLog("subscribeHudCallbacks()")
 
--- end
+end
 
--- function unsubscribeHudCallbacks()
+function unsubscribeHudCallbacks()
 
---     Sector():unregisterCallback("onPreRenderHud", "onPreRenderHud")
---     hudsubscribed = false
---     debugLog("unsubscribeHudCallbacks()")
+    Player():unregisterCallback("onPreRenderHud", "onPreRenderHud")
+    hudsubscribed = false
+    debugLog("unsubscribeHudCallbacks()")
 
--- end
+end
 
 
 function onShowWindow()
 
     -- pre-select orders tab everytime window is opened
+    laststateupdate = 0
     tabs.window:selectTab(tabs.orders)
 
     -- trigger updates of UI widgets
@@ -228,7 +234,7 @@ end
 function onCloseWindow()
 
     uivisible = false
-    doupdatestates = false
+    doupdatestates = hudconfig.showhud
 
 end
 
@@ -308,7 +314,7 @@ function buildOrdersUI(parent)
         
         -- create ship list widgets 
         local nameLabelX = 10
-        local stateLabelX = -200
+        local stateLabelX = -220
         local locLabelX = -85
 
         c_ord.ships.frame[g] = {}
@@ -317,6 +323,7 @@ function buildOrdersUI(parent)
         c_ord.ships.lblLoc[g] = {}
         c_ord.ships.btnLook[g] = {}
         c_ord.ships.cmdOrder[g] = {}
+        c_ord.ships.lblOrder[g] = {}
 
         local y_shp = y_grp + 15
         for s = 1, groupshiplimit do 
@@ -369,6 +376,8 @@ function buildOrdersUI(parent)
             for _, btninfo in pairs(ordersInfo) do
                 cbox:addEntry(btninfo.text)
             end
+            local orderlbl = parent:createLabel(vec2(split2.right.lower.x + 5, split2.right.lower.y + 6), "", 14)
+            orderlbl.font = "Arial"
 
             -- hide controls initially and add to reference table
             frame:hide()
@@ -377,6 +386,7 @@ function buildOrdersUI(parent)
             locLabel:hide()
             lookat:hide()
             cbox:hide()
+            orderlbl:hide()
 
             c_ord.ships.frame[g][s] = frame
             c_ord.ships.lblName[g][s] = nameLabel
@@ -384,6 +394,7 @@ function buildOrdersUI(parent)
             c_ord.ships.lblLoc[g][s] = locLabel
             c_ord.ships.btnLook[g][s] = lookat
             c_ord.ships.cmdOrder[g][s] = cbox
+            c_ord.ships.lblOrder[g][s] = orderlbl
 	   
         end
 
@@ -503,9 +514,11 @@ function buildConfigUI(parent)
     -- # (sounds?)
     --
     -- "HUD" category:
-    -- # enable/disable certain info output and various styles (vert/horz listing etc)
     -- # alter location of hud with offset values from top, left, right, bottom
-    --
+    -- # enable/disable certain info output and various styles (vert/horz listing etc)
+    -- # enable/disable output of state/loc/order
+    -- # enable/disable use of statecolors
+    -- 
     -- "Custom Orders" category for option related to "builtin" custom orders
     --
     -- "Integration" category for options regarding other mods
@@ -513,7 +526,14 @@ function buildConfigUI(parent)
 
     local size = parent.size
 
-    local split1 = UIVerticalSplitter(Rect(10, 10, size.x - 10, size.y - 10), 30, 0, 0.5)
+    local split0 = UIHorizontalSplitter(Rect(10, 10, size.x - 10, size.y - 10), 0, 0, 0.5)
+    split0.bottomSize = 18
+
+    -- mod info label
+    local modinfolbl = parent:createLabel(vec2(split0.bottom.upper.x - 210, split0.bottom.lower.y + 6), getModInfoLine(), 12)
+    modinfolbl.color = ColorRGB(0.2, 0.2, 0.2)
+
+    local split1 = UIVerticalSplitter(split0.top, 30, 0, 0.5)
     split1.leftSize = 150
 
     local split2 = UIHorizontalSplitter(split1.left, 10, 0, 0.5)
@@ -535,10 +555,10 @@ function buildConfigUI(parent)
     c_conf.cntCatGroups:createLabel(vec2(0, 0), "Groups Options", 16)
     c_conf.cntCatGroups:createLine(vec2(0, 30), vec2(rs.x, 30))
 
-    local sgrp1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 3)
+    local splitgrp1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 3)
     for p = 0, 3 do
         local g = p + 1
-        local r = sgrp1:partition(p)  
+        local r = splitgrp1:partition(p)  
 
         local frm = c_conf.cntCatGroups:createFrame(r)
         frm.backgroundColor = ColorARGB(0.2, 0, 0, 0)
@@ -587,13 +607,24 @@ function buildConfigUI(parent)
     c_conf.cntCatHUD:createLabel(vec2(0, 0), "HUD Options", 16)
     c_conf.cntCatHUD:createLine(vec2(0, 30), vec2(rs.x, 30))
 
-    -- local sgrp1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 3)
+    local splithud1 = UIHorizontalSplitter(Rect(0, 40, rs.x, rs.y), 10, 10, 0.5)
+    splithud1.topSize = 20
 
-    c_conf.hud.chkShowHud = c_conf.cntCatHUD:createCheckBox(Rect(10, 70, 200, 85), "Enable HUD Display", "onShowHudChecked")
-    c_conf.hud.lblHudNotice = c_conf.cntCatHUD:createLabel(vec2(10, 75), "HUD display is disabled on this server", 14)
+    c_conf.hud.chkShowHud = c_conf.cntCatHUD:createCheckBox(Rect(splithud1.top.lower.x, splithud1.top.lower.y + 5, splithud1.top.lower.x + 200, splithud1.top.lower.y + 20), "Enable HUD Display", "onShowHudChecked")
+    c_conf.hud.lblHudNotice = c_conf.cntCatHUD:createLabel(vec2(splithud1.top.lower.x, splithud1.top.lower.y + 5), "HUD display is disabled on this server", 14)
     c_conf.hud.lblHudNotice.color = ColorRGB(1, 0, 0)
     c_conf.hud.lblHudNotice:hide()
-      
+
+    local splithud2 = UIHorizontalSplitter(splithud1.bottom, 10, 0, 0.5)
+    splithud2.topSize = 400
+
+    local frm = c_conf.cntCatHUD:createFrame(splithud2.top)
+    local splithud3 = UIVerticalSplitter(splithud2.top, 10, 10, 0.5)
+
+
+
+
+    -- pre-select groups category 
     c_conf.lstCategories:select(0)
     c_conf.cntCatHUD:hide()
 
@@ -606,6 +637,7 @@ function onTabSelected()
 
     if tabs.orders and tabs.orders.index == selectedtabidx then
 
+        laststateupdate = 0
         -- update groupnames and shown groups in related widgets
         refreshGroupNames()
         refreshPageInfo()
@@ -703,12 +735,11 @@ function onGroupOrderSelected(sender)
     if lastgrouporder[grp] and lastgrouporder[grp] == oi.order then return end
 
     local indices = {}
-    local pshipIndex = Player().craftIndex
 
     -- issue orders to all group ships excluding player driven ships
-    for i, info in pairs(shipinfos[grp]) do
-        if info.index ~= pshipIndex and info.state ~= "NoCaptain" then
-            indices[i] = info.index
+    for i, ship in pairs(shipinfos[grp]) do
+        if not ship.isplayer and ship.hascaptain then
+            indices[i] = ship.index
         end
 	end
     invokeOrdersScript(indices, oi)
@@ -900,11 +931,11 @@ function onShowHudChecked()
     hudconfig.showhud = c_conf.hud.chkShowHud.checked
     pconfig.hud = hudconfig
 
-    -- if hudconfig.showhud then
-    --     subscribeHudCallbacks()
-    -- else
-    --     unsubscribeHudCallbacks()
-    -- end
+    if hudconfig.showhud then
+        subscribeHudCallbacks()
+    else
+        unsubscribeHudCallbacks()
+    end
 
 end
 
@@ -1065,26 +1096,25 @@ function displayShipState(g, s, ship, currloc)
     c_ord.ships.lblName[g][s].caption = ship.name
     c_ord.ships.lblName[g][s]:show()
 
-    if ship.elsewhere then
-        c_ord.ships.lblState[g][s].caption = "-"
-    else
-        local statetxt = "-"
-        if ship.state == "NoCaptain" then
-            statetxt = "No Captain"
-        elseif ship.state then
-            statetxt = ship.state
-        end
-        c_ord.ships.lblState[g][s].caption = statetxt
+    -- state of ship (AI)
+    local statetxt = "-"
+    local stateclr = ColorRGB(1,1,1)
+    if not ship.elsewhere and ship.state then
+        local si = table.childByKeyVal(statesInfo, "state", ship.state)
+        if si then
+            statetxt = si.text
+            stateclr = ColorRGB(si.color.r, si.color.g, si.color.b)
+        end 
     end
-    c_ord.ships.lblState[g][s].color = getShipStateColor(ship.state)
-    c_ord.ships.lblState[g][s].bold = (ship.state == "Player")
+    c_ord.ships.lblState[g][s].caption = statetxt
+    c_ord.ships.lblState[g][s].color = stateclr
     c_ord.ships.lblState[g][s]:show()
 
     -- location/sector of ship
-    if ship.location and ship.state ~= "Player" then 
+    if ship.location and not ship.isplayer then 
         local loc = vec2(ship.location.x, ship.location.y)
         if  loc.x == currloc.x and loc.y == currloc.y then
-            c_ord.ships.lblLoc[g][s].caption = "current"
+            c_ord.ships.lblLoc[g][s].caption = "(current)"
             c_ord.ships.lblLoc[g][s].italic = true
         else
             c_ord.ships.lblLoc[g][s].caption = tostring(loc) 
@@ -1094,15 +1124,30 @@ function displayShipState(g, s, ship, currloc)
         c_ord.ships.btnLook[g][s]:show() 
     end
    
-    if not ship.elsewhere and ship.state ~= "Player" and ship.state ~= "NoCaptain" then
-        c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
-        c_ord.ships.cmdOrder[g][s]:show()
-        if ship.order then
-            -- set selected order to ship's current order
-            local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
-            if oi then
-                lastshiporder[ship.name] = oi.order
-                c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
+    -- ship order
+    if not ship.elsewhere then
+        if ship.isplayer then
+            c_ord.ships.lblOrder[g][s].caption = "Player"
+            -- c_ord.ships.lblOrder[g][s].color = ColorRGB(0.4, 0.8, 0.3)
+            c_ord.ships.lblOrder[g][s].color = ColorRGB(0.3, 0.3, 0.3)
+            c_ord.ships.lblOrder[g][s]:show()
+        elseif not ship.hascaptain then
+            c_ord.ships.lblOrder[g][s].caption = "No Captain"
+            -- c_ord.ships.lblOrder[g][s].color = ColorRGB(0.75, 0.15, 0.1)
+            c_ord.ships.lblOrder[g][s].color = ColorRGB(0.3, 0.3, 0.3)
+            c_ord.ships.lblOrder[g][s]:show()
+        else
+            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
+            c_ord.ships.cmdOrder[g][s]:show()
+            if ship.order then
+                -- set selected order to ship's current order
+                local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
+                if oi then
+                    -- TODO: escort state does not always mean ship is following player craft!
+                    --       (integrate index cache for last known target)
+                    lastshiporder[ship.name] = oi.order
+                    c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
+                end
             end
         end
     end
@@ -1310,7 +1355,7 @@ end
 
 function updateClient(timeStep)
 
-    if doupdatestates and svals then
+    if doupdatestates and svals and pconfig then
 
         local current = systemTimeMs()
         -- only do update if configured delay has passed
@@ -1355,28 +1400,76 @@ function updateClient(timeStep)
             laststateupdate = current
             ordersbusy = false
         end
-
-    end
-
-    -- draw HUD elements if enabled
-    if svals.enablehud and hudconfig.showhud then
-        drawHud()
     end
 
 end
 
 
--- function onPreRenderHud()
+function onPreRenderHud()
 
---     debugLog("onPreRenderHud()")
---     --drawText("TEST", 10, 500, ColorARGB(0.5, 1, 1, 1), 16, false, false, 0)
+    -- draw HUD elements if enabled
+    if shipinfos and svals and svals.enablehud and hudconfig and hudconfig.showhud then
+    
+        local coords = vec2(Sector():getCoordinates())
 
--- end
+        local fontsize_group = 15
+        local fontsize_ship = 12
+        local offsetX = hudconfig.hudanchor.x
+        local offsetY = hudconfig.hudanchor.y
 
+        -- TODO: unify code for retrieving all labels, since also used by UI
 
-function drawHud()
+        for g, group in pairs(shipgroups) do 
+            local gconf = groupconfig[g]
+            if gconf.showhud and #shipinfos[g] > 0 then
+                local gcolor = ColorARGB(gconf.hudcolor.a, gconf.hudcolor.r, gconf.hudcolor.g, gconf.hudcolor.b)
+                drawText(gconf.name, offsetX, offsetY, gcolor, fontsize_group, false, false, 1) 
+                offsetY = offsetY + 20
+                for s, ship in pairs(shipinfos[g]) do
+                    drawText(shortenText(ship.name, hudnamemax), offsetX + 5, offsetY, gcolor, fontsize_ship, false, false, 0) 
 
-    drawText("TEST", 10, 500, ColorARGB(0.5, 1, 1, 1), 16, false, false, 0)
+                    local statetxt = "-"
+                    local stateclr = gcolor
+                    if not ship.elsewhere and ship.state then
+                        local si = table.childByKeyVal(statesInfo, "state", ship.state)
+                        if si then
+                            statetxt = si.text
+                            -- stateclr = ColorRGB(si.color.r, si.color.g, si.color.b)
+                        end 
+                    end
+                    drawText(statetxt, offsetX + 220, offsetY, stateclr, fontsize_ship, false, false, 0)
+
+                    local loctxt = "-"
+                    if ship.location then
+                        local loc = vec2(ship.location.x, ship.location.y)
+                        if  loc.x == coords.x and loc.y == coords.y then
+                            loctxt = "(current)"
+                        else
+                            loctxt = tostring(loc)
+                        end
+                    end
+                    drawText(loctxt, offsetX + 310, offsetY, gcolor, fontsize_ship, false, false, 0)
+                    
+                    local ordertxt = "-"
+                    if ship.isplayer then
+                        ordertxt = "Player"
+                    elseif not ship.hascaptain then
+                        ordertxt = "No Captain"
+                    elseif not ship.elsewhere and ship.order then
+                        local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
+                        if oi then
+                            ordertxt = oi.text
+                        end
+                    end
+                    drawText(ordertxt, offsetX + 410, offsetY, gcolor, fontsize_ship, false, false, 0)
+
+                    offsetY = offsetY + 18
+                end
+                offsetY = offsetY + 10
+            end
+        end
+
+    end
 
 end
 
@@ -1450,20 +1543,15 @@ function updateShipStates(groups, ships)
         if table.contains(updateships, ship.name) then
             local entity = Entity(ship.index)
             if entity and entity.isShip and entity.name == ship.name then
-                local state, order
                 -- TODO: check also if ship is controlled by another player
-                if entity.index == pshipIndex then
-                    state = "Player"
-                elseif checkShipCaptain(entity) then
-                    state, order = getShipAIOrderState(entity) 
-                else
-                    state = "NoCaptain"
-                end
+                local state, order = getShipAIOrderState(entity) 
                 table.insert(statedata, {
                     name = entity.name,
                     index = entity.index,
                     state = state,
-                    order = order
+                    order = order,
+                    hascaptain = checkShipCaptain(entity),
+                    isplayer = (entity.index == pshipIndex)
                 })
             end
         end
