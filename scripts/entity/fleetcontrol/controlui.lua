@@ -17,6 +17,13 @@ require "fleetcontrol.common"
 
 -- UI widget collections
 local mywindow
+local tabs = {
+    window = nil,
+    orders = nil,
+    groups = nil,
+    config = nil
+}
+
 local textdialog = {
     window = nil,
     param = nil,
@@ -34,11 +41,26 @@ local colordialog = {
     sliderG = nil,
     sliderB = nil
 }
-local tabs = {
+local hudposdialog = {
     window = nil,
-    orders = nil,
-    groups = nil,
-    config = nil
+    resolution = nil,
+    hudanchor = nil,
+    stepsize = 5,
+    lblHudPos = nil,
+    sliderStepSize = nil,
+    btnPosUp = nil,
+    btnPosDown = nil,
+    btnPosLeft = nil,
+    btnPosRight= nil,
+    btnAlignTL = nil,
+    btnAlignTC = nil,
+    btnAlignTR = nil,
+    btnAlignML = nil,
+    btnAlignMC = nil,
+    btnAlignMR = nil,
+    btnAlignBL = nil,
+    btnAlignBC = nil,
+    btnAlignBR = nil
 }
 
 local c_ord = {
@@ -84,7 +106,8 @@ local c_conf = {
     },
     hud = {
         chkShowHud = nil,
-        lblHudNotice = nil
+        lblHudNotice = nil,
+        btnPosHud = nil
     }
 }
 
@@ -115,6 +138,7 @@ local shipgroups
 -- client runtime data
 local shipinfos
 local knownships
+local hudanchoroverride
 
 -- client flags and timestamps
 local uivisible = false
@@ -236,6 +260,12 @@ function onCloseWindow()
     uivisible = false
     doupdatestates = hudconfig.showhud
 
+    -- handle dialog windows and related vars
+    if textdialog.window then textdialog.window:hide() end
+    if colordialog.window then colordialog.window:hide() end
+    if hudposdialog.window then hudposdialog.window:hide() end
+    hudanchoroverride = nil
+
 end
 
 
@@ -257,7 +287,6 @@ function initUI()
     tabs.window.onSelectedFunction = "onTabSelected"
 
     -- build tabs
-
     tabs.orders = tabs.window:createTab("Orders", "data/textures/icons/fleetcontrol/commander.png", "Fleet Orders")
     buildOrdersUI(tabs.orders)
 
@@ -268,9 +297,9 @@ function initUI()
     buildConfigUI(tabs.config)
 
     -- build dialogs
-
     buildTextDialog(menu, res)
     buildColorDialog(menu, res)
+    buildHudPositioningDialog(menu, res)
 
     scriptLog(nil, "client UI initialized successfully")
     
@@ -607,22 +636,17 @@ function buildConfigUI(parent)
     c_conf.cntCatHUD:createLabel(vec2(0, 0), "HUD Options", 16)
     c_conf.cntCatHUD:createLine(vec2(0, 30), vec2(rs.x, 30))
 
-    local splithud1 = UIHorizontalSplitter(Rect(0, 40, rs.x, rs.y), 10, 10, 0.5)
-    splithud1.topSize = 20
+    local splithud1 = UIHorizontalSplitter(Rect(0, 40, rs.x, rs.y), 20, 10, 0.5)
+    splithud1.topSize = 60
+    local splithud2 = UIVerticalSplitter(splithud1.top, 10, 10, 0.5)
 
-    c_conf.hud.chkShowHud = c_conf.cntCatHUD:createCheckBox(Rect(splithud1.top.lower.x, splithud1.top.lower.y + 5, splithud1.top.lower.x + 200, splithud1.top.lower.y + 20), "Enable HUD Display", "onShowHudChecked")
-    c_conf.hud.lblHudNotice = c_conf.cntCatHUD:createLabel(vec2(splithud1.top.lower.x, splithud1.top.lower.y + 5), "HUD display is disabled on this server", 14)
+    local xl, yl = splithud2.left.lower.x, splithud2.left.lower.y
+    c_conf.hud.chkShowHud = c_conf.cntCatHUD:createCheckBox(Rect(xl, yl + 5, xl + 210, yl + 30), "Enable HUD Display", "onShowHudChecked")
+    c_conf.hud.lblHudNotice = c_conf.cntCatHUD:createLabel(vec2(xl, yl + 5), "HUD display is disabled on this server", 14)
     c_conf.hud.lblHudNotice.color = ColorRGB(1, 0, 0)
     c_conf.hud.lblHudNotice:hide()
 
-    local splithud2 = UIHorizontalSplitter(splithud1.bottom, 10, 0, 0.5)
-    splithud2.topSize = 400
-
-    local frm = c_conf.cntCatHUD:createFrame(splithud2.top)
-    local splithud3 = UIVerticalSplitter(splithud2.top, 10, 10, 0.5)
-
-
-
+    c_conf.hud.btnPosHud = c_conf.cntCatHUD:createButton(splithud2.right, "Set HUD Position", "onSetHudPositionPressed")
 
     -- pre-select groups category 
     c_conf.lstCategories:select(0)
@@ -929,6 +953,8 @@ function onShowHudChecked()
 
     -- update config and save
     hudconfig.showhud = c_conf.hud.chkShowHud.checked
+    c_conf.hud.btnPosHud.active = c_conf.hud.chkShowHud.checked
+
     pconfig.hud = hudconfig
 
     if hudconfig.showhud then
@@ -939,6 +965,12 @@ function onShowHudChecked()
 
 end
 
+
+function onSetHudPositionPressed(sender)
+
+    showHudPositioningDialog()
+
+end
 
 ---- DIALOG WINDOWS ----
 
@@ -1082,6 +1114,234 @@ function showColorDialog(caption, param, callback, color)
     colordialog.callback = callback
 
     colordialog.window:show()
+
+end
+
+
+function buildHudPositioningDialog(menu, res)
+
+    local size = vec2(800, 260)
+
+    hudposdialog.window = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
+    hudposdialog.window.caption = "Set HUD Position"
+    hudposdialog.window.visible = false
+    hudposdialog.window.showCloseButton = 0
+    hudposdialog.window.moveable = 1
+    hudposdialog.window.closeableWithEscape = 0
+
+    local split1 = UIHorizontalSplitter(Rect(vec2(0, 0), size), 30, 20, 0.5)
+    split1.bottomSize = 50
+
+    local hudanchlbl = hudposdialog.window:createLabel(vec2(split1.bottom.lower.x + 10, split1.bottom.lower.y + 5), "Current Position:", 16)
+    hudanchlbl.italic = true
+    hudposdialog.lblHudPos = hudposdialog.window:createLabel(vec2(split1.bottom.lower.x + 175, split1.bottom.lower.y + 5), "", 16)
+
+    local xu, yu = split1.bottom.upper.x, split1.bottom.upper.y
+    hudposdialog.window:createButton(Rect(xu - 170, yu - 30, xu - 90, yu), "OK", "onHudPositioningDialogOKPressed")
+    hudposdialog.window:createButton(Rect(xu - 80, yu - 30, xu, yu), "Cancel", "onHudPositioningDialogCancelPressed")
+
+    -- local split2 = UIVerticalMultiSplitter(split1.top, 10, 0, 3)
+    local split2 = UIVerticalSplitter(split1.top, 10, 0, 0.5)
+    split2.rightSize = 450
+
+    local frm1 = hudposdialog.window:createFrame(split2.left)
+    local frm2 = hudposdialog.window:createFrame(split2.right)
+
+    -- create widgets for HUD positioning
+    local split4 = UIVerticalSplitter(split2.left, 25, 15, 0.5)
+    split4.leftSize = 120
+    local split5 = UIHorizontalSplitter(split4.left, 10, 0, 0.5)
+    split5.bottomSize = 30
+
+    local movelbl = hudposdialog.window:createLabel(vec2(split5.top.lower.x + 20, split5.top.lower.y + 5), "Move\nHUD", 18)
+    movelbl.color = ColorRGB(0,1,0)
+    hudposdialog.sliderStepSize = hudposdialog.window:createSlider(split5.bottom, 5, 100, 19, "Step Size (px)", "onHudStepSizeChanged")
+    hudposdialog.sliderStepSize.value = hudposdialog.stepsize
+
+    local splithudpos0 = UIHorizontalMultiSplitter(split4.right, 5, 0, 2)
+    local splithudpos1 = UIVerticalMultiSplitter(splithudpos0:partition(0), 0, 0, 2)
+    local splithudpos2 = UIVerticalMultiSplitter(splithudpos0:partition(1), 0, 0, 2)
+    local splithudpos3 = UIVerticalMultiSplitter(splithudpos0:partition(2), 0, 0, 2)
+
+    hudposdialog.btnPosUp = hudposdialog.window:createButton(splithudpos1:partition(1), "", "onPositionHudPressed")
+    hudposdialog.btnPosUp.icon = "data/textures/icons/fleetcontrol/arrowup.png"
+    hudposdialog.btnPosUp.tooltip = "Move HUD position up"
+    hudposdialog.btnPosLeft = hudposdialog.window:createButton(splithudpos2:partition(0), "", "onPositionHudPressed")
+    hudposdialog.btnPosLeft.icon = "data/textures/icons/fleetcontrol/arrowleft.png"
+    hudposdialog.btnPosLeft.tooltip = "Move HUD position left"
+    hudposdialog.btnPosRight = hudposdialog.window:createButton(splithudpos2:partition(2), "", "onPositionHudPressed")
+    hudposdialog.btnPosRight.icon = "data/textures/icons/fleetcontrol/arrowright.png"
+    hudposdialog.btnPosRight.tooltip = "Move HUD position right"
+    hudposdialog.btnPosDown = hudposdialog.window:createButton(splithudpos3:partition(1), "", "onPositionHudPressed")
+    hudposdialog.btnPosDown.icon = "data/textures/icons/fleetcontrol/arrowdown.png"
+    hudposdialog.btnPosDown.tooltip = "Move HUD position down"
+    
+    -- create widgets for HUD alignment
+    -- TODO: align to center of roughly calculated HUD display size (problem here is label size...)
+    local split3 = UIVerticalSplitter(split2.right, 10, 15, 0.5)
+    split3.leftSize = 120
+
+    local alignlbl = hudposdialog.window:createLabel(vec2(split3.left.lower.x + 20, split3.left.lower.y + 35), "Align\nHUD", 18)
+    alignlbl.color = ColorRGB(0,0,1)
+
+    local splithudalign0 = UIHorizontalMultiSplitter(split3.right, 10, 0, 2)
+    local splithudalign1 = UIVerticalMultiSplitter(splithudalign0:partition(0), 10, 0, 2)
+    local splithudalign2 = UIVerticalMultiSplitter(splithudalign0:partition(1), 10, 0, 2)
+    local splithudalign3 = UIVerticalMultiSplitter(splithudalign0:partition(2), 10, 0, 2)
+
+    hudposdialog.btnAlignTL = hudposdialog.window:createButton(splithudalign1:partition(0), "Top Left", "onAlignHudPressed")
+    hudposdialog.btnAlignTL.tooltip = "Align HUD to top-left of screen"
+    hudposdialog.btnAlignTL.textSize = 12
+    hudposdialog.btnAlignTC = hudposdialog.window:createButton(splithudalign1:partition(1), "Top Center", "onAlignHudPressed")
+    hudposdialog.btnAlignTC.tooltip = "Align HUD to top-center of screen"
+    hudposdialog.btnAlignTC.textSize = 12
+    hudposdialog.btnAlignTR = hudposdialog.window:createButton(splithudalign1:partition(2), "Top Right", "onAlignHudPressed")
+    hudposdialog.btnAlignTR.tooltip = "Align HUD to top-right of screen"
+    hudposdialog.btnAlignTR.textSize = 12
+
+    hudposdialog.btnAlignML = hudposdialog.window:createButton(splithudalign2:partition(0), "Mid Left", "onAlignHudPressed")
+    hudposdialog.btnAlignML.tooltip = "Align HUD to mid-left of screen"
+    hudposdialog.btnAlignML.textSize = 12
+    hudposdialog.btnAlignMC = hudposdialog.window:createButton(splithudalign2:partition(1), "Mid Center", "onAlignHudPressed")
+    hudposdialog.btnAlignMC.tooltip = "Align HUD to mid-center of screen"
+    hudposdialog.btnAlignMC.textSize = 12
+    hudposdialog.btnAlignMR = hudposdialog.window:createButton(splithudalign2:partition(2), "Mid Right", "onAlignHudPressed")
+    hudposdialog.btnAlignMR.tooltip = "Align HUD to mid-right of screen"
+    hudposdialog.btnAlignMR.textSize = 12
+
+    hudposdialog.btnAlignBL = hudposdialog.window:createButton(splithudalign3:partition(0), "Bottom Left", "onAlignHudPressed")
+    hudposdialog.btnAlignBL.tooltip = "Align HUD to bottom-left of screen"
+    hudposdialog.btnAlignBL.textSize = 12
+    hudposdialog.btnAlignBC = hudposdialog.window:createButton(splithudalign3:partition(1), "Bot. Center", "onAlignHudPressed")
+    hudposdialog.btnAlignBC.tooltip = "Align HUD to bottom-center of screen"
+    hudposdialog.btnAlignBC.textSize = 12
+    hudposdialog.btnAlignBR = hudposdialog.window:createButton(splithudalign3:partition(2), "Bottom Right", "onAlignHudPressed")
+    hudposdialog.btnAlignBR.tooltip = "Align HUD to bottom-right of screen"
+    hudposdialog.btnAlignBR.textSize = 12
+
+    
+    hudposdialog.window:hide()
+
+end
+
+function onHudStepSizeChanged()
+
+    hudposdialog.stepsize = hudposdialog.sliderStepSize.value
+
+end
+
+function onAlignHudPressed(sender)
+
+    if sender.index == hudposdialog.btnAlignTL.index then
+        -- top-left
+        hudposdialog.hudanchor.x = 50
+        hudposdialog.hudanchor.y = 50
+    elseif sender.index == hudposdialog.btnAlignTC.index then
+        -- top-center
+        hudposdialog.hudanchor.x = hudposdialog.resolution.x / 2
+        hudposdialog.hudanchor.y = 50
+    elseif sender.index == hudposdialog.btnAlignTR.index then
+        -- top-right
+        hudposdialog.hudanchor.x = hudposdialog.resolution.x - 350
+        hudposdialog.hudanchor.y = 50
+    elseif sender.index == hudposdialog.btnAlignML.index then
+        -- mid-left
+        hudposdialog.hudanchor.x = 50
+        hudposdialog.hudanchor.y = hudposdialog.resolution.y / 2
+    elseif sender.index == hudposdialog.btnAlignMC.index then
+        -- mid-center
+        hudposdialog.hudanchor.x = hudposdialog.resolution.x / 2
+        hudposdialog.hudanchor.y = hudposdialog.resolution.y / 2
+    elseif sender.index == hudposdialog.btnAlignMR.index then
+        -- mid-right
+        hudposdialog.hudanchor.x = hudposdialog.resolution.x - 350
+        hudposdialog.hudanchor.y = hudposdialog.resolution.y / 2
+    elseif sender.index == hudposdialog.btnAlignBL.index then
+        -- bottom-left
+        hudposdialog.hudanchor.x = 50
+        hudposdialog.hudanchor.y = hudposdialog.resolution.y - 150
+    elseif sender.index == hudposdialog.btnAlignBC.index then
+        -- bottom-center
+        hudposdialog.hudanchor.x = hudposdialog.resolution.x / 2
+        hudposdialog.hudanchor.y = hudposdialog.resolution.y - 150
+    elseif sender.index == hudposdialog.btnAlignBR.index then
+        -- bottom-right
+        hudposdialog.hudanchor.x = hudposdialog.resolution.x - 350
+        hudposdialog.hudanchor.y = hudposdialog.resolution.y - 150
+    end
+
+    hudanchoroverride = hudposdialog.hudanchor
+    hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
+
+end
+
+function onPositionHudPressed(sender)
+
+    if sender.index == hudposdialog.btnPosUp.index then
+        -- up
+        local newY = hudposdialog.hudanchor.y - hudposdialog.stepsize
+        if newY >= 0 then
+            hudposdialog.hudanchor.y = newY
+        else
+            hudposdialog.hudanchor.y = 0
+        end
+    elseif sender.index == hudposdialog.btnPosDown.index then
+        -- down
+        local newY = hudposdialog.hudanchor.y + hudposdialog.stepsize
+        if newY <= hudposdialog.resolution.y then
+            hudposdialog.hudanchor.y = newY
+        else
+            hudposdialog.hudanchor.y = hudposdialog.resolution.y
+        end
+    elseif sender.index == hudposdialog.btnPosLeft.index then
+        -- left
+        local newX = hudposdialog.hudanchor.x - hudposdialog.stepsize
+        if newX >= 0 then
+            hudposdialog.hudanchor.x = newX
+        else
+            hudposdialog.hudanchor.x = 0
+        end
+    elseif sender.index == hudposdialog.btnPosRight.index then
+        -- right
+        local newX = hudposdialog.hudanchor.x + hudposdialog.stepsize
+        if newX <= hudposdialog.resolution.x then
+            hudposdialog.hudanchor.x = newX
+        else
+            hudposdialog.hudanchor.x = hudposdialog.resolution.x
+        end
+    end
+
+    hudanchoroverride = hudposdialog.hudanchor
+    hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
+
+end
+
+function onHudPositioningDialogOKPressed()
+
+    hudposdialog.window:hide()
+    hudconfig.hudanchor = hudposdialog.hudanchor
+
+    -- save new config values
+    pconfig.hud = hudconfig
+    hudanchoroverride = nil
+
+end
+
+function onHudPositioningDialogCancelPressed()
+
+    hudposdialog.window:hide()
+    hudanchoroverride = nil
+
+end
+
+function showHudPositioningDialog()
+
+    hudposdialog.resolution = getResolution()
+    hudposdialog.hudanchor = hudconfig.hudanchor
+    hudanchoroverride = hudposdialog.hudanchor
+
+    hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
+    hudposdialog.window:show()
 
 end
 
@@ -1255,14 +1515,17 @@ end
 function refreshConfigUIHud()
 
     c_conf.hud.chkShowHud.checked = hudconfig.showhud
+    c_conf.hud.btnPosHud.active = hudconfig.showhud
 
     if not svals.enablehud then
         -- TODO: disable all HUD config widgets
         c_conf.hud.chkShowHud:hide()
+        c_conf.hud.btnPosHud:hide()
         c_conf.hud.lblHudNotice:show()
     else
         c_conf.hud.lblHudNotice:hide()
         c_conf.hud.chkShowHud:show()
+        c_conf.hud.btnPosHud:show()
     end
 
 end
@@ -1416,6 +1679,12 @@ function onPreRenderHud()
         local fontsize_ship = 12
         local offsetX = hudconfig.hudanchor.x
         local offsetY = hudconfig.hudanchor.y
+
+        -- use alternate HUD position for display (used when re-positioning HUD via dialog)
+        if hudanchoroverride then
+            offsetX = hudanchoroverride.x
+            offsetY = hudanchoroverride.y
+        end
 
         -- TODO: unify code for retrieving all labels, since also used by UI
 

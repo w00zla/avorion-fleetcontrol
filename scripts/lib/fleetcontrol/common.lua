@@ -150,6 +150,12 @@ function shortenText(text, maxlen)
 
 end
 
+
+function formatPosition(pos)
+    return string.format("X=%i Y=%i", pos.x, pos.y)
+end
+
+
 -- validate parameter value based on type
 function validateParameter(paramval, paramtype)
 
