@@ -175,31 +175,16 @@ function initialize()
     statesInfo = getStatesInfo()
 
     -- load player config values
-    loadPlayerConfig()
+    pconfig = getConfig("player", getPlayerConfigDefaults())
+    groupconfig = pconfig.groups
+    hudconfig = pconfig.hud
+    shipgroups = pconfig.shipgroups
+    knownships = pconfig.knownships
 
     if hudconfig.showhud then
         subscribeHudCallbacks()
         doupdatestates = true
     end
-
-end
-
-
-function loadPlayerConfig()
-
-    if onServer() then
-        invokeClientFunction(Player(), "loadPlayerConfig")
-        return
-    end
- 
-    pconfig = getConfig("player", getPlayerConfigDefaults())
-
-    groupconfig = pconfig.groups
-    hudconfig = pconfig.hud
-    shipgroups = pconfig.shipgroups
-    knownships = pconfig.knownships    
-
-    debugLog("loadPlayerConfig() -> complete")
 
 end
 
@@ -1707,6 +1692,11 @@ function updateClient(timeStep)
         local current = systemTimeMs()
         -- only do update if configured delay has passed
         if svals.updatedelay and (current - laststateupdate) >= svals.updatedelay then
+
+            -- get latest values for relevant player configs (since other scripts could have changed these)
+            pconfig = getConfig("player", getPlayerConfigDefaults())
+            shipgroups = pconfig.shipgroups
+            knownships = pconfig.knownships
 
             -- get all exisiting ships of player in current sector
             local sectorships = getPlayerCrafts()
