@@ -212,8 +212,10 @@ function syncServerValues(svalues)
     svals = svalues
     enableDebugOutput(svals.debugoutput)
 
-    debugLog("syncServerValues() -> svals:")
-    debugLog(printTable(svals))
+    if svals.debugoutput then 
+        debugLog("synced UI script server values:")
+        printTable(svals) 
+    end
 
 end
 
@@ -230,19 +232,21 @@ end
 
 function subscribeHudCallbacks()
 
+    -- debugLog("subscribeHudCallbacks()")
+
     if not hudsubscribed then
         Player():registerCallback("onPreRenderHud", "onPreRenderHud")
         hudsubscribed = true
-    end
-    debugLog("subscribeHudCallbacks()")
+    end   
 
 end
 
 function unsubscribeHudCallbacks()
 
+    -- debugLog("unsubscribeHudCallbacks()")
+
     Player():unregisterCallback("onPreRenderHud", "onPreRenderHud")
     hudsubscribed = false
-    debugLog("unsubscribeHudCallbacks()")
 
 end
 
@@ -1499,6 +1503,7 @@ end
 function onHudPositioningDialogCancelPressed()
 
     hudposdialog.window:hide()
+    hudposdialog.hudanchor = hudconfig.hudanchor
     hudanchoroverride = nil
 
 end
@@ -1507,7 +1512,7 @@ function showHudPositioningDialog()
 
     hudposdialog.resolution = getResolution()
     hudposdialog.hudanchor = hudconfig.hudanchor
-    hudanchoroverride = hudposdialog.hudanchor
+    -- hudanchoroverride = hudposdialog.hudanchor
 
     hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
     hudposdialog.window:show()
@@ -1997,7 +2002,11 @@ function onPreRenderHud()
                             drawText(loctxt, offshipX, offsetY, gcolor, fontsize_ship, false, false, 0)
                         end
 
-                        offsetY = offsetY + 18
+                        if hudconfig.hudstyle == 0 then
+                            offsetY = offsetY + 23
+                        else
+                            offsetY = offsetY + 18
+                        end 
                     end
                 end
 

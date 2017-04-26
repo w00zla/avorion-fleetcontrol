@@ -42,6 +42,7 @@ function updateConfig(player, configkey, configval)
 	local valid = false
 	local paramtype = ""
     local sconfig = getConfig("server", sconfigdefaults)
+	enableDebugOutput(sconfig.debugoutput) 
 	
 	if configkey == "updatedelay" then
 		paramtype = "pnum"
@@ -67,14 +68,33 @@ function updateConfig(player, configkey, configval)
 		sconfig[configkey] = configval		
 		scriptLog(player, "server configuration updated -> key: %s | val: %s", configkey, configval)
 		player:sendChatMessage(modinfo.name, 0, "Server configuration updated successfully")
+		-- trigger server config update for all relevant players
+		local playerIndices = {}
+		local onlinePlayers = Galaxy():getOnlinePlayerNames()
+		if type(onlinePlayers) == "string" then -- and onlinePlayers == player.name then
+			-- only one player, assume singleplayer game
+			table.insert(playerIndices, player.index)
+		else
+			for index, name in pairs(onlinePlayers) do
+				if Player(index):hasScript(fc_script_manager) then
+					table.insert(playerIndices, index)
+				end
+			end
+		end
+		if sconfig.debugoutput then
+			debugLog("update config -> found online players with manager script attached:")
+			printTable(playerIndices)
+		end
+		for _, idx in pairs(playerIndices) do
+			debugLog("update config -> triggering server config update in scripts for player %i", idx)
+			Player(idx):invokeFunction(fc_script_manager, "updateServerConfig") 
+		end
 	else
 		-- invalid value	
 		local paramtypelabel = getParamTypeLabel(paramtype)
 		scriptLog(player, "invalid server configuration value (key: %s | val: %s | paramtype: %s)", configkey, configval, paramtype)
 		player:sendChatMessage(modinfo.name, 0, "Error: %s parameter required for config '%s'!", paramtypelabel, configkey)
 	end
-
-	-- TODO: update server config for all manager/ui instances!
 
 end
 

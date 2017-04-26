@@ -141,20 +141,26 @@ function addShipUIScript(shipidx)
     -- add script to ship entity
     if shipidx and shipidx > 0 and lastCraft ~= shipidx then
         local entity = Entity(shipidx)
-        if entity then
+        if entity and valid(entity) then
             ensureEntityScript(entity, fc_script_controlui)
             lastCraft = entity.index
-
             -- push server config values to client UI script
-            local sconfig = getConfig("server", getServerConfigDefaults())
-            local svalues = { 
-                updatedelay = sconfig.updatedelay, 
-                debugoutput = sconfig.debugoutput,  
-                enablehud = sconfig.enablehud
-            }
-            entity:invokeFunction(fc_script_controlui, "syncServerValues", svalues)
+            pushShipUIServerConfig(entity)
         end
     end
+
+end
+
+
+function pushShipUIServerConfig(entity)
+
+    local sconfig = getConfig("server", getServerConfigDefaults())
+    local svalues = { 
+        updatedelay = sconfig.updatedelay, 
+        debugoutput = sconfig.debugoutput,  
+        enablehud = sconfig.enablehud
+    }
+    entity:invokeFunction(fc_script_controlui, "syncServerValues", svalues)
 
 end
 
@@ -164,7 +170,7 @@ function removeShipUIScript(shipidx)
     -- remove scripts(s) from player ship
     if shipidx and shipidx > 0 then
         local entity = Entity(shipidx)
-        if entity then
+        if entity and valid(entity) then
             removeEntityScript(entity, fc_script_controlui)
             if shipidx == lastCraft then
                 lastCraft = nil
@@ -196,7 +202,7 @@ end
 function removePlayerShip(index)
 
     local entity = Entity(index)
-    if entity then
+    if entity and valid(entity) then
         -- get config values to update
         local pconfig = getConfig("player", getPlayerConfigDefaults())
         local knownships = pconfig.knownships
@@ -271,6 +277,20 @@ function updateSectorPlayerShips()
         -- update player config
         pconfig.knownships = knownships
         scriptLog(Player(), "player known and group ships were updated")
+    end
+
+end
+
+
+function updateServerConfig()
+
+    local player = Player()
+    if player.craftIndex and player.craftIndex > 0 then
+        local entity = Entity(player.craftIndex)
+        if entity and valid(entity) then
+            -- push server config values to client UI script
+            pushShipUIServerConfig(entity)
+        end
     end
 
 end
