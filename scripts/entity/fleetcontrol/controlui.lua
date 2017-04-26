@@ -818,7 +818,8 @@ function onShipOrderSelected(sender)
                 local oi = ordersInfo[cmd.selectedIndex]
                 if lastshiporder[shipinfos[g][s].name] == nil or oi.order ~= lastshiporder[shipinfos[g][s].name] then
                     local indices = {shipinfos[g][s].index}	
-                    invokeOrdersScript(indices, oi)
+                    -- playSound("place_turret3.wav", SoundType.UI, 1)
+                    invokeOrdersScript(indices, oi)                       
                 end
                 break
             end
@@ -1215,12 +1216,13 @@ function buildHudPositioningDialog(menu, res)
     -- create widgets for HUD positioning
     local split4 = UIVerticalSplitter(split2.left, 25, 15, 0.5)
     split4.leftSize = 120
-    local split5 = UIHorizontalSplitter(split4.left, 10, 0, 0.5)
+    local split5 = UIHorizontalSplitter(split4.left, 10, 10, 0.5)
     split5.bottomSize = 30
 
-    local movelbl = hudposdialog.window:createLabel(vec2(split5.top.lower.x + 20, split5.top.lower.y + 5), "Move\nHUD", 18)
+    local movelbl = hudposdialog.window:createLabel(vec2(split5.top.lower.x + 15, split5.top.lower.y), "Move\nHUD", 18)
     movelbl.color = ColorRGB(0,1,0)
-    hudposdialog.sliderStepSize = hudposdialog.window:createSlider(split5.bottom, 5, 100, 19, "Step Size (px)", "onHudStepSizeChanged")
+    hudposdialog.sliderStepSize = hudposdialog.window:createSlider(split5.bottom, 5, 100, 19, "Step Size", "onHudStepSizeChanged")
+    hudposdialog.sliderStepSize.unit = "px"
     hudposdialog.sliderStepSize.value = hudposdialog.stepsize
 
     local splithudpos0 = UIHorizontalMultiSplitter(split4.right, 5, 0, 2)

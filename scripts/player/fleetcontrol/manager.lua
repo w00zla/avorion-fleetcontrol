@@ -222,12 +222,7 @@ function removePlayerShip(index)
             pconfig.shipgroups = shipgroups
             -- debugLog("onDestroyed() -> shipgroups:")
             -- debugLog(printTable(shipgroups))
-            
-            -- force update of config values in UI script
-            local pc = Entity(lastCraft)
-            if pc and valid(pc) then
-                pc:invokeFunction(fc_script_controlui, "loadPlayerConfig")
-            end
+
             scriptLog(Player(), "player ship '%s' was destroyed -> known and group ships were updated", entity.name)       
         end
     end
@@ -273,11 +268,8 @@ function updateSectorPlayerShips()
             table.remove(knownships, idx)        
             scriptLog(Player(), "player ship '%s' was expected but not found in sector!", ship.name)
         end
+        -- update player config
         pconfig.knownships = knownships
-        local pc = Entity(lastCraft)
-        if pc and valid(pc) then
-            pc:invokeFunction(fc_script_controlui, "loadPlayerConfig")
-        end
         scriptLog(Player(), "player known and group ships were updated")
     end
 
