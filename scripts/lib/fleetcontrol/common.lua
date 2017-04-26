@@ -57,7 +57,7 @@ local pconfigdefaults = {
     hud = {
             showhud = false,
             hudanchor = {x=50,y=50},
-            hudstyle = 1,
+            hudstyle = 0,
             showgroupnames = true,
             showshipstates = true,     
             showshiporders = true,

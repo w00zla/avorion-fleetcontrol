@@ -549,6 +549,7 @@ function buildConfigUI(parent)
     -- "HUD" category:
     -- # define hotkey for HUD display
     -- # define font-size(s)
+    -- # shadow/outline text options
     -- 
     -- "UI General" category:
     -- # select orders tab on window open
@@ -651,7 +652,8 @@ function buildConfigUI(parent)
     local splithud2 = UIVerticalSplitter(splithud1.top, 10, 10, 0.5)
 
     local xl, yl = splithud2.left.lower.x, splithud2.left.lower.y
-    c_conf.hud.chkShowHud = c_conf.cntCatHUD:createCheckBox(Rect(xl, yl + 5, xl + 210, yl + 30), "Enable HUD Display", "onShowHudChecked")
+    c_conf.hud.chkShowHud = c_conf.cntCatHUD:createCheckBox(Rect(xl, yl + 10, xl + 220, yl + 30), "Enable HUD Display", "onShowHudChecked")
+    c_conf.hud.chkShowHud.fontSize = 16
     c_conf.hud.lblHudNotice = c_conf.cntCatHUD:createLabel(vec2(xl, yl + 5), "HUD display is disabled on this server", 14)
     c_conf.hud.lblHudNotice.color = ColorRGB(1, 0, 0)
     c_conf.hud.lblHudNotice:hide()
@@ -661,16 +663,25 @@ function buildConfigUI(parent)
     local splithud3 = UIVerticalSplitter(splithud1.bottom, 0, 0, 0.5)
     local splithud4 = UIHorizontalMultiSplitter(splithud3.left, 20, 20, 6)
 
-    c_conf.hud.cmbHudStyle = c_conf.cntCatHUD:createComboBox(splithud4:partition(0), "onHudStyleSelected")
-    c_conf.hud.cmbHudStyle:addEntry("Horizontal")
+    local shudstyle = UIVerticalSplitter(splithud4:partition(0), 0, 0, 0.5)
+    c_conf.cntCatHUD:createLabel(vec2(shudstyle.left.lower.x, shudstyle.left.lower.y + 5), "Listing Style:", 14)
+    local r = shudstyle.right
+    c_conf.hud.cmbHudStyle = c_conf.cntCatHUD:createComboBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 30), "onHudStyleSelected")
     c_conf.hud.cmbHudStyle:addEntry("Vertical")
+    c_conf.hud.cmbHudStyle:addEntry("Horizontal")
 
-    c_conf.hud.chkShowGrpNames = c_conf.cntCatHUD:createCheckBox(splithud4:partition(1), "Show group names", "onHudOptionChecked")
-    c_conf.hud.chkShowShpStates = c_conf.cntCatHUD:createCheckBox(splithud4:partition(2), "Show ship states", "onHudOptionChecked")
-    c_conf.hud.chkShowShpOrders = c_conf.cntCatHUD:createCheckBox(splithud4:partition(3), "Show ship orders", "onHudOptionChecked")
-    c_conf.hud.chkShowShpLocs = c_conf.cntCatHUD:createCheckBox(splithud4:partition(4), "Show ship locations", "onHudOptionChecked")
-    c_conf.hud.chkHideUncaptained = c_conf.cntCatHUD:createCheckBox(splithud4:partition(5), "Hide 'Player' and 'No Captain' ships", "onHudOptionChecked")
-    c_conf.hud.chkUseUiStateClrs = c_conf.cntCatHUD:createCheckBox(splithud4:partition(6), "Use UI colors for states", "onHudOptionChecked")
+    local r = splithud4:partition(1)
+    c_conf.hud.chkShowGrpNames = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Show group names", "onHudOptionChecked")
+    local r = splithud4:partition(2)
+    c_conf.hud.chkShowShpStates = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Show ship states", "onHudOptionChecked")
+    local r = splithud4:partition(3)
+    c_conf.hud.chkShowShpOrders = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Show ship orders", "onHudOptionChecked")
+    local r = splithud4:partition(4)
+    c_conf.hud.chkShowShpLocs = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Show ship locations", "onHudOptionChecked")
+    local r = splithud4:partition(5)
+    c_conf.hud.chkHideUncaptained = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Hide Player/NoCaptain ships", "onHudOptionChecked")
+    local r = splithud4:partition(6)
+    c_conf.hud.chkUseUiStateClrs = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Use UI colors for states", "onHudOptionChecked")
 
     -- pre-select groups category 
     c_conf.lstCategories:select(0)
@@ -1004,8 +1015,11 @@ end
 
 function onHudStyleSelected()
 
+    hudconfig.hudstyle = c_conf.hud.cmbHudStyle.selectedIndex
+    pconfig.hud = hudconfig
 
 end
+
 
 function onHudOptionChecked(sender)
 
@@ -1659,6 +1673,8 @@ function refreshConfigUIHud()
         c_conf.hud.btnPosHud:show()
     end
 
+    c_conf.hud.cmbHudStyle:setSelectedIndexNoCallback(hudconfig.hudstyle)
+
     c_conf.hud.chkShowGrpNames.checked = hudconfig.showgroupnames
     c_conf.hud.chkShowShpStates.checked = hudconfig.showshipstates
     c_conf.hud.chkShowShpOrders.checked = hudconfig.showshiporders
@@ -1769,8 +1785,20 @@ function onPreRenderHud()
                     if not hudconfig.hideuncaptained or (not ship.isplayer and ship.hascaptain) then
                         local offshipX = offsetX
 
-                        drawText(shortenText(ship.name, hudnamemax), offshipX + 5, offsetY, gcolor, fontsize_ship, false, false, 0) 
-                        offshipX = offshipX + 220
+                        local name
+                        if hudconfig.hudstyle == 0 then
+                            name = ship.name
+                        else
+                            name = shortenText(ship.name, hudnamemax) -- shorten text to max size for horizontal style
+                        end
+                        drawText(name, offshipX + 5, offsetY, gcolor, fontsize_ship, false, false, 1) 
+
+                        if hudconfig.hudstyle == 0 then
+                            offsetY = offsetY + 18
+                            offshipX = offshipX + 30
+                        else
+                            offshipX = offshipX + 220
+                        end 
                 
                         if hudconfig.showshipstates then
                             local statetxt = "-"
