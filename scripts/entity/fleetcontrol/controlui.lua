@@ -546,14 +546,18 @@ function buildConfigUI(parent)
 
     -- IDEAS for configs
     --------------------
-    -- "General" category:
-    -- # close window on "look at" click if ship in sector
-    -- # select orders tab on window open
-    -- # always select first page on orders tab
-    -- # (sounds?)
-    --
     -- "HUD" category:
     -- # define hotkey for HUD display
+    -- # define font-size(s)
+    -- 
+    -- "UI General" category:
+    -- # select orders tab on window open
+    -- # always select first page on orders tab
+    -- # close window on "look at" click if ship in sector
+    -- # enable and define sound for order action
+    --
+    -- "UI Colors" category:
+    -- # define state colors
     -- 
     -- "Custom Orders" category for option related to "builtin" custom orders
     -- "Integration" category for options regarding other mods
@@ -667,13 +671,6 @@ function buildConfigUI(parent)
     c_conf.hud.chkShowShpLocs = c_conf.cntCatHUD:createCheckBox(splithud4:partition(4), "Show ship locations", "onHudOptionChecked")
     c_conf.hud.chkHideUncaptained = c_conf.cntCatHUD:createCheckBox(splithud4:partition(5), "Hide 'Player' and 'No Captain' ships", "onHudOptionChecked")
     c_conf.hud.chkUseUiStateClrs = c_conf.cntCatHUD:createCheckBox(splithud4:partition(6), "Use UI colors for states", "onHudOptionChecked")
-
-    c_conf.hud.chkShowGrpNames.checked = hudconfig.showgroupnames
-    c_conf.hud.chkShowShpStates.checked = hudconfig.showshipstates
-    c_conf.hud.chkShowShpOrders.checked = hudconfig.showshiporders
-    c_conf.hud.chkShowShpLocs.checked = hudconfig.showshiplocations
-    c_conf.hud.chkHideUncaptained.checked = hudconfig.hideuncaptained
-    c_conf.hud.chkUseUiStateClrs.checked = hudconfig.useuistatecolors
 
     -- pre-select groups category 
     c_conf.lstCategories:select(0)
@@ -943,6 +940,8 @@ end
 
 function onGroupHudChecked(sender)
 
+    if not eventsactive then return end
+
     for i, chk in pairs(c_conf.groups.chkShowHud) do
 		if chk.index == sender.index then
             groupconfig[i].showhud = chk.checked
@@ -959,6 +958,7 @@ function onPickHudColorPressed(sender)
 		if btn.index == sender.index then
             local color = ColorARGB(groupconfig[i].hudcolor.a, groupconfig[i].hudcolor.r, groupconfig[i].hudcolor.g, groupconfig[i].hudcolor.b)
             showColorDialog("Choose HUD Color", i, onPickHudColorCallback, color)
+            break
 		end
 	end
 
@@ -977,6 +977,8 @@ end
 
 
 function onShowHudChecked()
+
+    if not eventsactive then return end
 
     -- update config and save
     hudconfig.showhud = c_conf.hud.chkShowHud.checked
@@ -1397,6 +1399,71 @@ end
 
 ---- UI UPDATES ----
 
+function refreshGroupNames()
+
+    -- Orders tab
+    for i, g in orderGroupsIter() do
+        c_ord.lblGroupName[i].caption = groupconfig[g].name
+    end
+
+    for g = 1, 4 do 
+        -- Groups tab
+        c_grp.groups.lblName[g].caption = groupconfig[g].name
+        -- Config tab
+        c_conf.groups.lblName[g].caption = groupconfig[g].name      
+    end
+
+end
+
+
+function refreshOrdersUI()
+
+    -- hide all ship list widgets at first
+    for g = 1, ordergroupslimit do
+        for s = 1, groupshiplimit do
+            c_ord.ships.frame[g][s]:hide()
+            c_ord.ships.lblName[g][s]:hide()
+            c_ord.ships.lblState[g][s]:hide()
+            c_ord.ships.lblLoc[g][s]:hide()
+            c_ord.ships.btnLook[g][s]:hide()
+            c_ord.ships.cmdOrder[g][s]:hide()
+        end
+    end
+
+    if not shipinfos then return end
+
+    
+    local currentcoords = vec2(Sector():getCoordinates())
+
+    for i, g in orderGroupsIter() do
+        local ordersequal = #shipinfos[g] > 0
+        local lastorder = nil
+
+        for s, shipinfo in pairs(shipinfos[g]) do 
+            -- check if all ships have same order/state
+            if lastorder and shipinfo.order and lastorder ~= shipinfo.order then
+                ordersequal = false
+            end
+            lastorder = shipinfo.order
+
+            displayShipState(i, s, shipinfo, currentcoords)       
+        end
+
+        -- pre-select group order
+        if ordersequal then
+            local oi, j = table.childByKeyVal(ordersInfo, "order", lastorder)
+            if oi then
+                lastgrouporder[g] = oi.order
+                c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
+            end
+        else
+            c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(0)
+        end
+    end
+
+end
+
+
 function displayShipState(g, s, ship, currloc)
 
     if g > ordergroupslimit or s > groupshiplimit then return end
@@ -1463,119 +1530,6 @@ function displayShipState(g, s, ship, currloc)
 
     -- make rest of ship related widgets visible
     c_ord.ships.frame[g][s]:show() 
-
-end
-
-
-function refreshOrdersUI()
-
-    -- hide all ship list widgets at first
-    for g = 1, ordergroupslimit do
-        for s = 1, groupshiplimit do
-            c_ord.ships.frame[g][s]:hide()
-            c_ord.ships.lblName[g][s]:hide()
-            c_ord.ships.lblState[g][s]:hide()
-            c_ord.ships.lblLoc[g][s]:hide()
-            c_ord.ships.btnLook[g][s]:hide()
-            c_ord.ships.cmdOrder[g][s]:hide()
-        end
-    end
-
-    if not shipinfos then return end
-
-    
-    local currentcoords = vec2(Sector():getCoordinates())
-
-    for i, g in orderGroupsIter() do
-        local ordersequal = #shipinfos[g] > 0
-        local lastorder = nil
-
-        for s, shipinfo in pairs(shipinfos[g]) do 
-            -- check if all ships have same order/state
-            if lastorder and shipinfo.order and lastorder ~= shipinfo.order then
-                ordersequal = false
-            end
-            lastorder = shipinfo.order
-
-            displayShipState(i, s, shipinfo, currentcoords)       
-        end
-
-        -- pre-select group order
-        if ordersequal then
-            local oi, j = table.childByKeyVal(ordersInfo, "order", lastorder)
-            if oi then
-                lastgrouporder[g] = oi.order
-                c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
-            end
-        else
-            c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(0)
-        end
-    end
-
-end
-
-
-function refreshGroupNames()
-
-    -- Orders tab
-    for i, g in orderGroupsIter() do
-        c_ord.lblGroupName[i].caption = groupconfig[g].name
-    end
-
-    for g = 1, 4 do 
-        -- Groups tab
-        c_grp.groups.lblName[g].caption = groupconfig[g].name
-        -- Config tab
-        c_conf.groups.lblName[g].caption = groupconfig[g].name      
-    end
-    
-end
-
-
-function refreshConfigUICategory()
-
-    -- show selected options category widgets
-    if c_conf.lstCategories.selected ~= configCatsLastIndex then  
-        configCatsLastIndex = c_conf.lstCategories.selected
-        if configCatsLastIndex == 0 then
-            c_conf.cntCatHUD:hide()
-            c_conf.cntCatGroups:show()
-        elseif configCatsLastIndex == 1 then
-            c_conf.cntCatGroups:hide()
-            c_conf.cntCatHUD:show()
-        end        
-    end
-
-end
-
-
-function refreshConfigUIGroups()
-
-    for g = 1, 4 do 
-        c_conf.groups.lblName[g].caption = groupconfig[g].name
-        c_conf.groups.chkShowHud[g].checked = groupconfig[g].showhud or false
-        local hudcolor = groupconfig[g].hudcolor
-        c_conf.groups.picHudColorPrev[g].color = ColorARGB(hudcolor.a, hudcolor.r, hudcolor.g, hudcolor.b)
-    end
-
-end
-
-
-function refreshConfigUIHud()
-
-    c_conf.hud.chkShowHud.checked = hudconfig.showhud
-    c_conf.hud.btnPosHud.active = hudconfig.showhud
-
-    if not svals.enablehud then
-        -- TODO: disable all HUD config widgets
-        c_conf.hud.chkShowHud:hide()
-        c_conf.hud.btnPosHud:hide()
-        c_conf.hud.lblHudNotice:show()
-    else
-        c_conf.hud.lblHudNotice:hide()
-        c_conf.hud.chkShowHud:show()
-        c_conf.hud.btnPosHud:show()
-    end
 
 end
 
@@ -1650,6 +1604,69 @@ function refreshGroupsUIButtons(force)
             c_grp.groups.btnMoveDown[i].active = (groupListsLastIndices[i] >= 0 and groupListsLastIndices[i] < (c_grp.groups.lstShips[i].rows-1))
         end
     end
+
+end
+
+
+function refreshConfigUICategory()
+
+    -- show selected options category widgets
+    if c_conf.lstCategories.selected ~= configCatsLastIndex then  
+        configCatsLastIndex = c_conf.lstCategories.selected
+        if configCatsLastIndex == 0 then
+            c_conf.cntCatHUD:hide()
+            c_conf.cntCatGroups:show()
+        elseif configCatsLastIndex == 1 then
+            c_conf.cntCatGroups:hide()
+            c_conf.cntCatHUD:show()
+        end        
+    end
+
+end
+
+
+function refreshConfigUIGroups()
+
+    eventsactive = false
+
+    for g = 1, 4 do 
+        c_conf.groups.lblName[g].caption = groupconfig[g].name
+        c_conf.groups.chkShowHud[g].checked = groupconfig[g].showhud or false
+        local hudcolor = groupconfig[g].hudcolor
+        c_conf.groups.picHudColorPrev[g].color = ColorARGB(hudcolor.a, hudcolor.r, hudcolor.g, hudcolor.b)
+    end
+
+    eventsactive = true
+
+end
+
+
+function refreshConfigUIHud()
+
+    eventsactive = false
+
+    c_conf.hud.chkShowHud.checked = hudconfig.showhud
+    c_conf.hud.btnPosHud.active = hudconfig.showhud
+
+    if not svals.enablehud then
+        -- TODO: disable all HUD config widgets
+        c_conf.hud.chkShowHud:hide()
+        c_conf.hud.btnPosHud:hide()
+        c_conf.hud.lblHudNotice:show()
+    else
+        c_conf.hud.lblHudNotice:hide()
+        c_conf.hud.chkShowHud:show()
+        c_conf.hud.btnPosHud:show()
+    end
+
+    c_conf.hud.chkShowGrpNames.checked = hudconfig.showgroupnames
+    c_conf.hud.chkShowShpStates.checked = hudconfig.showshipstates
+    c_conf.hud.chkShowShpOrders.checked = hudconfig.showshiporders
+    c_conf.hud.chkShowShpLocs.checked = hudconfig.showshiplocations
+    c_conf.hud.chkHideUncaptained.checked = hudconfig.hideuncaptained
+    c_conf.hud.chkUseUiStateClrs.checked = hudconfig.useuistatecolors
+
+    eventsactive = true
 
 end
 
