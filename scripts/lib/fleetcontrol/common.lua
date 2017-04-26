@@ -65,6 +65,24 @@ local pconfigdefaults = {
             hideuncaptained = true,
             useuistatecolors = false,
         },
+    ui = {
+            preselectorderstab = true,
+            preselectordersfirstpage = false,
+            closewindowonlookat = true,
+            statecolors = {
+                Aggressive = {r=0.9,g=0.5,b=0.2},
+                Attack = {r=0.9,g=0.7,b=0.4},
+                Escort = {r=0.9,g=0.9,b=0},
+                Fly = {r=0.6,g=0.3,b=0.4},
+                Follow = {r=0.8,g=0.9,b=0.1},
+                Guard = {r=0.2,g=0.4,b=0.8},
+                Idle = {r=0.3,g=0.3,b=0.3},
+                Jump = {r=0.5,g=0.4,b=0.7},
+                None = {r=1,g=1,b=1},
+                Passive = {r=0.5,g=0.5,b=0.5},
+                Patrol = {r=0.6,g=0.7,b=0.9},
+            }
+        },
     knownships = {},
     shipgroups = { {},{},{},{} }
 }

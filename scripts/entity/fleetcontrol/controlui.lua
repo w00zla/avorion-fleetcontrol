@@ -97,6 +97,8 @@ local c_conf = {
     lstCategories = nil,
     cntCatGroups = nil,
     cntCatHUD = nil,
+    cntCatUIGeneral = nil,
+    cntCatUIColors = nil,
     groups = {
         lblName = {},
         btnRename = {},
@@ -115,6 +117,15 @@ local c_conf = {
         chkShowShpLocs = nil,
         chkHideUncaptained = nil,
         chkUseUiStateClrs = nil,
+    },
+    uigeneral = {
+        chkSelectOrdersTab = nil,
+        chkSelectOrdersFirstPage = nil,
+        chkCloseWindowOnLookAt = nil,
+    },
+    uicolors = {
+        picStateColorPrev = {},
+        btnStateColorPick = {}
     }
 }
 
@@ -140,20 +151,21 @@ local ordersInfo
 local statesInfo
 local groupconfig
 local hudconfig
+local uiconfig
+local knownships
 local shipgroups
 
 -- client runtime data
 local shipinfos
-local knownships
 local hudanchoroverride
-local eventsactive 
-
+ 
 -- client flags and timestamps
 local uivisible = false
 local doupdatestates = false
 local laststateupdate = 0
 local ordersbusy = false
 local hudsubscribed = false
+local eventsactive = false
 
 
 function initialize()
@@ -178,6 +190,7 @@ function initialize()
     pconfig = getConfig("player", getPlayerConfigDefaults())
     groupconfig = pconfig.groups
     hudconfig = pconfig.hud
+    uiconfig = pconfig.ui
     shipgroups = pconfig.shipgroups
     knownships = pconfig.knownships
 
@@ -238,7 +251,10 @@ function onShowWindow()
 
     -- pre-select orders tab everytime window is opened
     laststateupdate = 0
-    tabs.window:selectTab(tabs.orders)
+
+    if uiconfig.preselectorderstab then
+        tabs.window:selectTab(tabs.orders)
+    end  
 
     -- trigger updates of UI widgets
     uivisible = true   
@@ -293,6 +309,9 @@ function initUI()
     buildTextDialog(menu, res)
     buildColorDialog(menu, res)
     buildHudPositioningDialog(menu, res)
+
+    -- init with first tab
+    tabs.window:selectTab(tabs.orders)
 
     eventsactive = true
 
@@ -537,9 +556,6 @@ function buildConfigUI(parent)
     -- # shadow/outline text options
     -- 
     -- "UI General" category:
-    -- # select orders tab on window open
-    -- # always select first page on orders tab
-    -- # close window on "look at" click if ship in sector
     -- # enable and define sound for order action
     --
     -- "UI Colors" category:
@@ -668,9 +684,43 @@ function buildConfigUI(parent)
     local r = splithud4:partition(6)
     c_conf.hud.chkUseUiStateClrs = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Use UI colors for states", "onHudOptionChecked")
 
+    -- UI General options
+
+    c_conf.lstCategories:addEntry("UI General")
+    c_conf.cntCatUIGeneral = parent:createContainer(split1.right)
+
+    local rs = c_conf.cntCatUIGeneral.size
+
+    c_conf.cntCatUIGeneral:createLabel(vec2(0, 0), "General UI Options", 16)
+    c_conf.cntCatUIGeneral:createLine(vec2(0, 30), vec2(rs.x, 30))
+
+    local splituig1 = UIHorizontalSplitter(Rect(0, 40, rs.x, rs.y), 20, 30, 0.35)
+    local splituig2 = UIHorizontalMultiSplitter(splituig1.top, 10, 0, 2)
+
+    local r = splituig2:partition(0)
+    c_conf.uigeneral.chkSelectOrdersTab = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y, r.lower.x + 350, r.lower.y + 20), "Select orders tab on window open", "onUiGeneralOptionChecked")
+    local r = splituig2:partition(1)
+    c_conf.uigeneral.chkSelectOrdersFirstPage = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y, r.lower.x + 350, r.lower.y + 20), "Select first page on orders tab", "onUiGeneralOptionChecked")
+    local r = splituig2:partition(2)
+    c_conf.uigeneral.chkCloseWindowOnLookAt = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y, r.lower.x + 350, r.lower.y + 20), "Close window on 'Look At' action", "onUiGeneralOptionChecked")
+    
+    -- UI Colors options
+
+    c_conf.lstCategories:addEntry("UI Colors")
+    c_conf.cntCatUIColors = parent:createContainer(split1.right)
+
+    local rs = c_conf.cntCatUIColors.size
+
+    c_conf.cntCatUIColors:createLabel(vec2(0, 0), "UI Color Options", 16)
+    c_conf.cntCatUIColors:createLine(vec2(0, 30), vec2(rs.x, 30))
+
+
+
     -- pre-select groups category 
     c_conf.lstCategories:select(0)
     c_conf.cntCatHUD:hide()
+    c_conf.cntCatUIGeneral:hide()
+    c_conf.cntCatUIColors:hide()
 
 end
 
@@ -682,6 +732,11 @@ function onTabSelected()
     if tabs.orders and tabs.orders.index == selectedtabidx then
 
         laststateupdate = 0
+        if uiconfig.preselectordersfirstpage then
+            currentPage = 1
+            c_ord.btnPrevPage.active = false
+            c_ord.btnNextPage.active = true
+        end  
         -- update groupnames and shown groups in related widgets
         refreshGroupNames()
         refreshPageInfo()
@@ -697,6 +752,8 @@ function onTabSelected()
         -- update config tab widgets
         refreshConfigUIGroups()
         refreshConfigUIHud()
+        refreshConfigUIGeneral()
+        refreshConfigUIColors()
 
     end
 
@@ -745,13 +802,16 @@ function onLookAtPressed(sender)
                     if entity then
                         Player().selectedObject = entity
                     end
-                    return
                 elseif shipinfos[g][s].location then
                     local coords = shipinfos[g][s].location
                     GalaxyMap():setSelectedCoordinates(coords.x, coords.y)
                     GalaxyMap():show(coords.x, coords.y)
-                    return
-                end               
+                end 
+                if uiconfig.closewindowonlookat then
+                    mywindow:hide()
+                    ScriptUI():stopInteraction() -- close all windows
+                end    
+                return          
             end
         end
     end
@@ -1019,6 +1079,19 @@ function onHudOptionChecked(sender)
     hudconfig.useuistatecolors = c_conf.hud.chkUseUiStateClrs.checked
 
     pconfig.hud = hudconfig
+
+end
+
+
+function onUiGeneralOptionChecked(sender)
+
+    if not eventsactive then return end
+
+    uiconfig.preselectorderstab = c_conf.uigeneral.chkSelectOrdersTab.checked
+    uiconfig.preselectordersfirstpage = c_conf.uigeneral.chkSelectOrdersFirstPage.checked
+    uiconfig.closewindowonlookat = c_conf.uigeneral.chkCloseWindowOnLookAt.checked
+
+    pconfig.ui = uiconfig
 
 end
 
@@ -1616,10 +1689,24 @@ function refreshConfigUICategory()
         configCatsLastIndex = c_conf.lstCategories.selected
         if configCatsLastIndex == 0 then
             c_conf.cntCatHUD:hide()
+            c_conf.cntCatUIGeneral:hide()
+            c_conf.cntCatUIColors:hide()
             c_conf.cntCatGroups:show()
         elseif configCatsLastIndex == 1 then
             c_conf.cntCatGroups:hide()
+            c_conf.cntCatUIGeneral:hide()
+            c_conf.cntCatUIColors:hide()
             c_conf.cntCatHUD:show()
+        elseif configCatsLastIndex == 2 then
+            c_conf.cntCatGroups:hide()
+            c_conf.cntCatHUD:hide()
+            c_conf.cntCatUIGeneral:show()
+            c_conf.cntCatUIColors:hide()       
+        elseif configCatsLastIndex == 3 then
+            c_conf.cntCatGroups:hide()
+            c_conf.cntCatHUD:hide()
+            c_conf.cntCatUIGeneral:hide()
+            c_conf.cntCatUIColors:show()
         end        
     end
 
@@ -1674,6 +1761,29 @@ function refreshConfigUIHud()
 end
 
 
+function refreshConfigUIGeneral()
+
+    eventsactive = false
+
+    c_conf.uigeneral.chkSelectOrdersTab.checked = uiconfig.preselectorderstab
+    c_conf.uigeneral.chkSelectOrdersFirstPage.checked = uiconfig.preselectordersfirstpage
+    c_conf.uigeneral.chkCloseWindowOnLookAt.checked = uiconfig.closewindowonlookat
+
+    eventsactive = true
+
+end
+
+
+function refreshConfigUIColors()
+
+    eventsactive = false
+
+
+    eventsactive = true
+
+end
+
+
 function updateUI()
 
     if selectedtabidx == tabs.groups.index then
@@ -1687,7 +1797,7 @@ end
 
 function updateClient(timeStep)
 
-    if doupdatestates and svals and pconfig then
+    if doupdatestates and svals then
 
         local current = systemTimeMs()
         -- only do update if configured delay has passed
