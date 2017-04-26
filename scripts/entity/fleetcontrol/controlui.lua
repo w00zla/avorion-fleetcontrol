@@ -1492,7 +1492,7 @@ end
 function onHudPositioningDialogOKPressed()
 
     hudposdialog.window:hide()
-    hudconfig.hudanchor = hudposdialog.hudanchor
+    hudconfig.hudanchor = { x=hudposdialog.hudanchor.x, y=hudposdialog.hudanchor.y }
 
     -- save new config values
     pconfig.hud = hudconfig
@@ -1503,7 +1503,6 @@ end
 function onHudPositioningDialogCancelPressed()
 
     hudposdialog.window:hide()
-    hudposdialog.hudanchor = hudconfig.hudanchor
     hudanchoroverride = nil
 
 end
@@ -1511,8 +1510,8 @@ end
 function showHudPositioningDialog()
 
     hudposdialog.resolution = getResolution()
-    hudposdialog.hudanchor = hudconfig.hudanchor
-    -- hudanchoroverride = hudposdialog.hudanchor
+    hudposdialog.hudanchor = { x=hudconfig.hudanchor.x, y=hudconfig.hudanchor.y }
+    hudanchoroverride = hudposdialog.hudanchor
 
     hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
     hudposdialog.window:show()
