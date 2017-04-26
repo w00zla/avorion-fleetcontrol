@@ -56,7 +56,14 @@ local pconfigdefaults = {
         },
     hud = {
             showhud = false,
-            hudanchor = {x=10,y=200}
+            hudanchor = {x=50,y=50},
+            hudstyle = 1,
+            showgroupnames = true,
+            showshipstates = true,     
+            showshiporders = true,
+            showshiplocations = false,
+            hideuncaptained = true,
+            useuistatecolors = false,
         },
     knownships = {},
     shipgroups = { {},{},{},{} }

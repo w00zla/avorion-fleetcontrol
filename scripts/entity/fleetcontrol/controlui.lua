@@ -107,7 +107,14 @@ local c_conf = {
     hud = {
         chkShowHud = nil,
         lblHudNotice = nil,
-        btnPosHud = nil
+        btnPosHud = nil,
+        cmbHudStyle = nil,
+        chkShowGrpNames = nil,
+        chkShowShpStates = nil,
+        chkShowShpOrders = nil,
+        chkShowShpLocs = nil,
+        chkHideUncaptained = nil,
+        chkUseUiStateClrs = nil,
     }
 }
 
@@ -139,6 +146,7 @@ local shipgroups
 local shipinfos
 local knownships
 local hudanchoroverride
+local eventsactive 
 
 -- client flags and timestamps
 local uivisible = false
@@ -300,6 +308,8 @@ function initUI()
     buildTextDialog(menu, res)
     buildColorDialog(menu, res)
     buildHudPositioningDialog(menu, res)
+
+    eventsactive = true
 
     scriptLog(nil, "client UI initialized successfully")
     
@@ -543,13 +553,9 @@ function buildConfigUI(parent)
     -- # (sounds?)
     --
     -- "HUD" category:
-    -- # alter location of hud with offset values from top, left, right, bottom
-    -- # enable/disable certain info output and various styles (vert/horz listing etc)
-    -- # enable/disable output of state/loc/order
-    -- # enable/disable use of statecolors
+    -- # define hotkey for HUD display
     -- 
     -- "Custom Orders" category for option related to "builtin" custom orders
-    --
     -- "Integration" category for options regarding other mods
 
 
@@ -647,6 +653,27 @@ function buildConfigUI(parent)
     c_conf.hud.lblHudNotice:hide()
 
     c_conf.hud.btnPosHud = c_conf.cntCatHUD:createButton(splithud2.right, "Set HUD Position", "onSetHudPositionPressed")
+
+    local splithud3 = UIVerticalSplitter(splithud1.bottom, 0, 0, 0.5)
+    local splithud4 = UIHorizontalMultiSplitter(splithud3.left, 20, 20, 6)
+
+    c_conf.hud.cmbHudStyle = c_conf.cntCatHUD:createComboBox(splithud4:partition(0), "onHudStyleSelected")
+    c_conf.hud.cmbHudStyle:addEntry("Horizontal")
+    c_conf.hud.cmbHudStyle:addEntry("Vertical")
+
+    c_conf.hud.chkShowGrpNames = c_conf.cntCatHUD:createCheckBox(splithud4:partition(1), "Show group names", "onHudOptionChecked")
+    c_conf.hud.chkShowShpStates = c_conf.cntCatHUD:createCheckBox(splithud4:partition(2), "Show ship states", "onHudOptionChecked")
+    c_conf.hud.chkShowShpOrders = c_conf.cntCatHUD:createCheckBox(splithud4:partition(3), "Show ship orders", "onHudOptionChecked")
+    c_conf.hud.chkShowShpLocs = c_conf.cntCatHUD:createCheckBox(splithud4:partition(4), "Show ship locations", "onHudOptionChecked")
+    c_conf.hud.chkHideUncaptained = c_conf.cntCatHUD:createCheckBox(splithud4:partition(5), "Hide 'Player' and 'No Captain' ships", "onHudOptionChecked")
+    c_conf.hud.chkUseUiStateClrs = c_conf.cntCatHUD:createCheckBox(splithud4:partition(6), "Use UI colors for states", "onHudOptionChecked")
+
+    c_conf.hud.chkShowGrpNames.checked = hudconfig.showgroupnames
+    c_conf.hud.chkShowShpStates.checked = hudconfig.showshipstates
+    c_conf.hud.chkShowShpOrders.checked = hudconfig.showshiporders
+    c_conf.hud.chkShowShpLocs.checked = hudconfig.showshiplocations
+    c_conf.hud.chkHideUncaptained.checked = hudconfig.hideuncaptained
+    c_conf.hud.chkUseUiStateClrs.checked = hudconfig.useuistatecolors
 
     -- pre-select groups category 
     c_conf.lstCategories:select(0)
@@ -971,6 +998,28 @@ function onSetHudPositionPressed(sender)
     showHudPositioningDialog()
 
 end
+
+
+function onHudStyleSelected()
+
+
+end
+
+function onHudOptionChecked(sender)
+
+    if not eventsactive then return end
+
+    hudconfig.showgroupnames = c_conf.hud.chkShowGrpNames.checked
+    hudconfig.showshipstates = c_conf.hud.chkShowShpStates.checked
+    hudconfig.showshiporders = c_conf.hud.chkShowShpOrders.checked
+    hudconfig.showshiplocations = c_conf.hud.chkShowShpLocs.checked
+    hudconfig.hideuncaptained = c_conf.hud.chkHideUncaptained.checked
+    hudconfig.useuistatecolors = c_conf.hud.chkUseUiStateClrs.checked
+
+    pconfig.hud = hudconfig
+
+end
+
 
 ---- DIALOG WINDOWS ----
 
@@ -1692,49 +1741,69 @@ function onPreRenderHud()
             local gconf = groupconfig[g]
             if gconf.showhud and #shipinfos[g] > 0 then
                 local gcolor = ColorARGB(gconf.hudcolor.a, gconf.hudcolor.r, gconf.hudcolor.g, gconf.hudcolor.b)
-                drawText(gconf.name, offsetX, offsetY, gcolor, fontsize_group, false, false, 1) 
-                offsetY = offsetY + 20
-                for s, ship in pairs(shipinfos[g]) do
-                    drawText(shortenText(ship.name, hudnamemax), offsetX + 5, offsetY, gcolor, fontsize_ship, false, false, 0) 
 
-                    local statetxt = "-"
-                    local stateclr = gcolor
-                    if not ship.elsewhere and ship.state then
-                        local si = table.childByKeyVal(statesInfo, "state", ship.state)
-                        if si then
-                            statetxt = si.text
-                            -- stateclr = ColorRGB(si.color.r, si.color.g, si.color.b)
-                        end 
-                    end
-                    drawText(statetxt, offsetX + 220, offsetY, stateclr, fontsize_ship, false, false, 0)
-
-                    local loctxt = "-"
-                    if ship.location then
-                        local loc = vec2(ship.location.x, ship.location.y)
-                        if  loc.x == coords.x and loc.y == coords.y then
-                            loctxt = "(current)"
-                        else
-                            loctxt = tostring(loc)
-                        end
-                    end
-                    drawText(loctxt, offsetX + 310, offsetY, gcolor, fontsize_ship, false, false, 0)
-                    
-                    local ordertxt = "-"
-                    if ship.isplayer then
-                        ordertxt = "Player"
-                    elseif not ship.hascaptain then
-                        ordertxt = "No Captain"
-                    elseif not ship.elsewhere and ship.order then
-                        local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
-                        if oi then
-                            ordertxt = oi.text
-                        end
-                    end
-                    drawText(ordertxt, offsetX + 410, offsetY, gcolor, fontsize_ship, false, false, 0)
-
-                    offsetY = offsetY + 18
+                if hudconfig.showgroupnames then
+                    drawText(gconf.name, offsetX, offsetY, gcolor, fontsize_group, false, false, 1) 
+                    offsetY = offsetY + 20
                 end
-                offsetY = offsetY + 10
+    
+                for s, ship in pairs(shipinfos[g]) do
+                    
+                    if not hudconfig.hideuncaptained or (not ship.isplayer and ship.hascaptain) then
+                        local offshipX = offsetX
+
+                        drawText(shortenText(ship.name, hudnamemax), offshipX + 5, offsetY, gcolor, fontsize_ship, false, false, 0) 
+                        offshipX = offshipX + 220
+                
+                        if hudconfig.showshipstates then
+                            local statetxt = "-"
+                            -- TODO: set color according to config
+                            local stateclr = gcolor
+                            if not ship.elsewhere and ship.state then
+                                local si = table.childByKeyVal(statesInfo, "state", ship.state)
+                                if si then
+                                    statetxt = si.text
+                                    -- stateclr = ColorRGB(si.color.r, si.color.g, si.color.b)
+                                end 
+                            end                         
+                            drawText(statetxt, offshipX, offsetY, stateclr, fontsize_ship, false, false, 0)    
+                            offshipX = offshipX + 90                  
+                        end
+
+                        if hudconfig.showshiporders then
+                            local ordertxt = "-"
+                            if ship.isplayer then
+                                ordertxt = "Player"
+                            elseif not ship.hascaptain then
+                                ordertxt = "No Captain"
+                            elseif not ship.elsewhere and ship.order then
+                                local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
+                                if oi then
+                                    ordertxt = oi.text
+                                end
+                            end                          
+                            drawText(ordertxt, offshipX, offsetY, gcolor, fontsize_ship, false, false, 0)
+                            offshipX = offshipX + 120
+                        end
+
+                        if hudconfig.showshiplocations then
+                            local loctxt = "-"
+                            if ship.location then
+                                local loc = vec2(ship.location.x, ship.location.y)
+                                if  loc.x == coords.x and loc.y == coords.y then
+                                    loctxt = "(current)"
+                                else
+                                    loctxt = tostring(loc)
+                                end
+                            end
+                            drawText(loctxt, offshipX, offsetY, gcolor, fontsize_ship, false, false, 0)
+                        end
+
+                        offsetY = offsetY + 18
+                    end
+                end
+
+                offsetY = offsetY + 5
             end
         end
 
