@@ -133,7 +133,6 @@ local c_conf = {
 local ordergroupslimit = 2
 local groupshiplimit = 6
 local groupnamelimit = 18
-local hudnamemax = 20
 
 -- UI widget indices
 local shipPoolLastIndex
@@ -561,9 +560,6 @@ function buildConfigUI(parent)
     -- 
     -- "UI General" category:
     -- # enable and define sound for order action
-    --
-    -- "UI Colors" category:
-    -- # define state colors
     -- 
     -- "Custom Orders" category for option related to "builtin" custom orders
     -- "Integration" category for options regarding other mods
@@ -674,6 +670,7 @@ function buildConfigUI(parent)
     c_conf.hud.cmbHudStyle = c_conf.cntCatHUD:createComboBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 30), "onHudStyleSelected")
     c_conf.hud.cmbHudStyle:addEntry("Vertical")
     c_conf.hud.cmbHudStyle:addEntry("Horizontal")
+    c_conf.hud.cmbHudStyle:addEntry("Horizontal Wide")
 
     local r = splithud4:partition(1)
     c_conf.hud.chkShowGrpNames = c_conf.cntCatHUD:createCheckBox(Rect(r.lower.x, r.lower.y, r.upper.x, r.lower.y + 20), "Show group names", "onHudOptionChecked")
@@ -929,6 +926,8 @@ function onUnassignShipGroupPressed(sender)
             break
 		end
 	end
+
+    -- TODO: sort ship list alphanum style
 
     refreshGroupsUIButtons(true)
     refreshGroupsInfo()
@@ -1783,7 +1782,6 @@ function refreshConfigUIHud()
     c_conf.hud.btnPosHud.active = hudconfig.showhud
 
     if not svals.enablehud then
-        -- TODO: disable all HUD config widgets
         c_conf.hud.chkShowHud:hide()
         c_conf.hud.btnPosHud:hide()
         c_conf.hud.lblHudNotice:show()
@@ -1871,7 +1869,7 @@ function updateClient(timeStep)
             local knownshipsupdate = false
             for _, s in pairs(sectorships) do 
 
-                -- TODO: add ship entity scripts here!!
+                -- TODO: add non-UI entity scripts here!!
 
                 local ship, idx = table.childByKeyVal(knownships, "name", s.name)
                 if not ship then
@@ -1890,8 +1888,7 @@ function updateClient(timeStep)
             end
             if knownshipsupdate then
                 debugLog("updateClient() -> updating player knownships")
-                -- TODO: apply sorting to new table structure
-                --alphanumsort(knownships)
+                sortShipsArray(knownships)
                 pconfig.knownships = knownships
             end
 
@@ -1924,8 +1921,6 @@ function onPreRenderHud()
             offsetY = hudanchoroverride.y
         end
 
-        -- TODO: unify code for retrieving all labels, since also used by UI
-
         for g, group in pairs(shipgroups) do 
             local gconf = groupconfig[g]
             if gconf.showhud and #shipinfos[g] > 0 then
@@ -1944,16 +1939,20 @@ function onPreRenderHud()
                         local name
                         if hudconfig.hudstyle == 0 then
                             name = ship.name
+                        elseif hudconfig.hudstyle == 1 then                      
+                            name = shortenText(ship.name, 15) -- shorten text to max size for horizontal style
                         else
-                            name = shortenText(ship.name, hudnamemax) -- shorten text to max size for horizontal style
+                            name = shortenText(ship.name, 25) -- shorten text to max size for horiz.wide style
                         end
                         drawText(name, offshipX + 5, offsetY, gcolor, fontsize_ship, false, false, 1) 
 
                         if hudconfig.hudstyle == 0 then
                             offsetY = offsetY + 18
                             offshipX = offshipX + 30
+                        elseif hudconfig.hudstyle == 1 then
+                            offshipX = offshipX + 170
                         else
-                            offshipX = offshipX + 220
+                            offshipX = offshipX + 270
                         end 
                 
                         if hudconfig.showshipstates then

@@ -303,6 +303,14 @@ function alphanumsort(o)
   return o
 
 end
+function sortShipsArray(o)
+
+  local function padnum(d) return ("%03d%s"):format(#d, d) end
+  table.sort(o, function(a,b)
+    return a.name:gsub("%d+",padnum) < b.name:gsub("%d+",padnum) end)
+  return o
+
+end
 
 
 function checkShipCaptain(entity)

@@ -192,7 +192,7 @@ function removeAllScripts()
         removeShipUIScript(lastCraft)	
     end
 
-    -- TODO: remove all scripts from every entity
+    -- TODO: remove all scripts from every entity when non-UI entity scripts are added
 
     -- remove myself
     terminate()
