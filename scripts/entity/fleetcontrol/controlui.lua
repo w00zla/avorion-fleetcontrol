@@ -148,7 +148,7 @@ local lastgrouporder = {}
 local pconfig
 local svals
 local ordersInfo
-local statesInfo
+local aiStates
 local groupconfig
 local hudconfig
 local uiconfig
@@ -184,7 +184,7 @@ function initialize()
     enableDebugOutput(svals.debugoutput)
 
     ordersInfo = getOrdersInfo()
-    statesInfo = getStatesInfo()
+    aiStates = getAiStates()
 
     -- load player config values
     pconfig = getConfig("player", getPlayerConfigDefaults())
@@ -714,7 +714,22 @@ function buildConfigUI(parent)
     c_conf.cntCatUIColors:createLabel(vec2(0, 0), "UI Color Options", 16)
     c_conf.cntCatUIColors:createLine(vec2(0, 30), vec2(rs.x, 30))
 
+    local splituic1 = UIHorizontalMultiSplitter(Rect(0, 40, rs.x, rs.y), 10, 25, #aiStates-1)
 
+    for i, state in pairs(aiStates) do
+        local r = splituic1:partition(i-1)
+        local xl, yl = r.lower.x, r.lower.y
+        local stateclrlblpre = c_conf.cntCatUIColors:createLabel(vec2(xl, yl + 5), "State: ", 13)
+        stateclrlblpre.color = ColorRGB(0.3, 0.3, 0.3)
+        local stateclrlbl = c_conf.cntCatUIColors:createLabel(vec2(xl + 55, yl + 5), state, 14)
+        local clrprev = c_conf.cntCatUIColors:createPicture(Rect(xl + 200, yl, xl + 230, yl + 30), "data/textures/icons/fleetcontrol/white.png")
+        local colorpic = c_conf.cntCatUIColors:createButton(Rect(xl + 235, yl, xl + 265, yl + 30), "", "onPickStateColorPressed")
+        colorpic.icon = "data/textures/icons/fleetcontrol/colorpicker.png"
+        colorpic.tooltip = "Choose state color"
+
+        table.insert(c_conf.uicolors.picStateColorPrev, clrprev)
+        table.insert(c_conf.uicolors.btnStateColorPick, colorpic)
+    end
 
     -- pre-select groups category 
     c_conf.lstCategories:select(0)
@@ -1014,7 +1029,7 @@ function onPickHudColorPressed(sender)
     for i, btn in pairs(c_conf.groups.btnHudColorPick) do
 		if btn.index == sender.index then
             local color = ColorARGB(groupconfig[i].hudcolor.a, groupconfig[i].hudcolor.r, groupconfig[i].hudcolor.g, groupconfig[i].hudcolor.b)
-            showColorDialog("Choose HUD Color", i, onPickHudColorCallback, color)
+            showColorDialog("Choose HUD Color", i, onPickHudColorCallback, color, true)
             break
 		end
 	end
@@ -1092,6 +1107,30 @@ function onUiGeneralOptionChecked(sender)
     uiconfig.closewindowonlookat = c_conf.uigeneral.chkCloseWindowOnLookAt.checked
 
     pconfig.ui = uiconfig
+
+end
+
+
+function onPickStateColorPressed(sender)
+
+    for i, btn in pairs(c_conf.uicolors.btnStateColorPick) do
+		if btn.index == sender.index then
+            local clrval = uiconfig.statecolors[aiStates[i]]
+            showColorDialog("Choose State Color", i, onPickStateColorCallback, ColorRGB(clrval.r, clrval.g, clrval.b), false)
+            break
+		end
+	end
+
+end
+
+function onPickStateColorCallback(result, color, param)
+
+    if result and color then
+        -- update config with new state color
+        uiconfig.statecolors[aiStates[param]] = {r=color.r,g=color.g,b=color.b}
+        pconfig.ui = uiconfig
+        refreshConfigUIColors()
+    end
 
 end
 
@@ -1223,13 +1262,18 @@ function onColorDialogCancelPressed()
 
 end
 
-function showColorDialog(caption, param, callback, color)
+function showColorDialog(caption, param, callback, color, showalpha)
 
     colordialog.window.caption = caption
     colordialog.colorpreview.color = color
 
     -- sync value sliders
     colordialog.sliderA.sliderPosition = color.a
+    if showalpha then
+        colordialog.sliderA:show()
+    else
+        colordialog.sliderA:hide()
+    end
     colordialog.sliderR.sliderPosition = color.r
     colordialog.sliderG.sliderPosition = color.g
     colordialog.sliderB.sliderPosition = color.b
@@ -1550,10 +1594,10 @@ function displayShipState(g, s, ship, currloc)
     local statetxt = "-"
     local stateclr = ColorRGB(1,1,1)
     if not ship.elsewhere and ship.state then
-        local si = table.childByKeyVal(statesInfo, "state", ship.state)
-        if si then
-            statetxt = si.text
-            stateclr = ColorRGB(si.color.r, si.color.g, si.color.b)
+        statetxt = ship.state
+        local sc = uiconfig.statecolors[ship.state]
+        if sc then
+            stateclr = ColorRGB(sc.r, sc.g, sc.b)
         end 
     end
     c_ord.ships.lblState[g][s].caption = statetxt
@@ -1578,13 +1622,11 @@ function displayShipState(g, s, ship, currloc)
     if not ship.elsewhere then
         if ship.isplayer then
             c_ord.ships.lblOrder[g][s].caption = "Player"
-            -- c_ord.ships.lblOrder[g][s].color = ColorRGB(0.4, 0.8, 0.3)
-            c_ord.ships.lblOrder[g][s].color = ColorRGB(0.3, 0.3, 0.3)
+            --c_ord.ships.lblOrder[g][s].color = ColorRGB(0.3, 0.3, 0.3)
             c_ord.ships.lblOrder[g][s]:show()
         elseif not ship.hascaptain then
             c_ord.ships.lblOrder[g][s].caption = "No Captain"
-            -- c_ord.ships.lblOrder[g][s].color = ColorRGB(0.75, 0.15, 0.1)
-            c_ord.ships.lblOrder[g][s].color = ColorRGB(0.3, 0.3, 0.3)
+            --c_ord.ships.lblOrder[g][s].color = ColorRGB(0.3, 0.3, 0.3)
             c_ord.ships.lblOrder[g][s]:show()
         else
             c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
@@ -1778,6 +1820,14 @@ function refreshConfigUIColors()
 
     eventsactive = false
 
+    for i, state in pairs(aiStates) do
+        local sc = uiconfig.statecolors[state]
+        if sc then
+            c_conf.uicolors.picStateColorPrev[i].color = ColorRGB(sc.r, sc.g, sc.b)
+        else
+            c_conf.uicolors.picStateColorPrev[i].color = ColorRGB(1, 1, 1)
+        end
+    end
 
     eventsactive = true
 
@@ -1904,14 +1954,15 @@ function onPreRenderHud()
                 
                         if hudconfig.showshipstates then
                             local statetxt = "-"
-                            -- TODO: set color according to config
                             local stateclr = gcolor
                             if not ship.elsewhere and ship.state then
-                                local si = table.childByKeyVal(statesInfo, "state", ship.state)
-                                if si then
-                                    statetxt = si.text
-                                    -- stateclr = ColorRGB(si.color.r, si.color.g, si.color.b)
-                                end 
+                                statetxt = ship.state
+                                if hudconfig.useuistatecolors then
+                                    local sc = uiconfig.statecolors[ship.state]
+                                    if sc then
+                                        stateclr = ColorARGB(gconf.hudcolor.a, sc.r, sc.g, sc.b)
+                                    end
+                                end
                             end                         
                             drawText(statetxt, offshipX, offsetY, stateclr, fontsize_ship, false, false, 0)    
                             offshipX = offshipX + 90                  

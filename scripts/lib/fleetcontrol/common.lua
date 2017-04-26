@@ -105,18 +105,9 @@ local ordersInfo = {
     { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed" }
 }
 
-local statesInfo = {
-    { state="None", text="None", color={r=1,g=1,b=1} },
-    { state="Idle", text="Idle", color={r=0.3,g=0.3,b=0.3} },
-    { state="Patrol", text="Patrol", color={r=0.6,g=0.7,b=0.9} },
-    { state="Escort", text="Escort", color={r=0.9,g=0.9,b=0} },
-    { state="Aggressive", text="Aggressive", color={r=0.9,g=0.5,b=0.2} },
-    { state="Passive", text="Passive", color={r=0.5,g=0.5,b=0.5} },
-    { state="Guard", text="Guard", color={r=0.2,g=0.4,b=0.8} },
-    { state="Jump", text="Jump", color={r=0.5,g=0.4,b=0.7} },
-    { state="Fly", text="Fly", color={r=0.6,g=0.3,b=0.4} },
-    { state="Attack", text="Attack", color={r=0.9,g=0.7,b=0.4} },
-    { state="Follow", text="Follow", color={r=0.8,g=0.9,b=0.1} }
+local aiStates = {
+    "Aggressive", "Attack", "Escort", "Fly", "Follow", 
+    "Guard", "Idle", "Jump", "None", "Passive", "Patrol"
 }
 
 local paramtypelabels = { pnum="Number", bool="Boolean" }
@@ -144,8 +135,8 @@ function getOrdersInfo()
     return ordersInfo
 end
 
-function getStatesInfo()
-    return statesInfo
+function getAiStates()
+    return aiStates
 end
 
 
