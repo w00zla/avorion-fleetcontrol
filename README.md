@@ -9,7 +9,7 @@ In the first place, the mod provides an UI window which you can use to:
 - assign fleet ships to groups 
 - give orders to complete ship-groups or single ships
 - configure the look and feel of the UI *(group-names, colors etc.)*
-- enable highly customizable HUD display *(so you have all valuable info about your ships right at the screen!)*
+- enable highly customizable HUD display *(so you have the info about your ships right at the screen!)*
 
 #### Screenshots
 
@@ -106,6 +106,8 @@ currently, its not possible to get the ships (escort) target via script, so the 
 - improvements for multiplayer:
     * improved state-handling for out-of-sector ships
     * recognize if ships are controlled by other players
-- better HUD alignments via config
+- more ship state infos in UI and HUD, like hull, shield, velocity etc.
+- notifications for orders and other events (with config)
+- better HUD alignments based on actual HUD size
 - warning on improper player jump-distances when escorted by ships *(required API requested from koonschi, waiting...)*
 - info on current target for states like "Escort" *(required API requested from koonschi, waiting...)*
