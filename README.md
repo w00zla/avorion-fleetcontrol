@@ -106,8 +106,9 @@ currently, its not possible to get the ships (escort) target via script, so the 
 - improvements for multiplayer:
     * improved state-handling for out-of-sector ships
     * recognize if ships are controlled by other players
-- more ship state infos in UI and HUD, like hull, shield, velocity etc.
+- add sounds for actions like "give order" (with config)
 - notifications for orders and other events (with config)
+- more ship state infos in UI and HUD, like hull, shield, velocity etc.
 - better HUD alignments based on actual HUD size
 - warning on improper player jump-distances when escorted by ships *(required API requested from koonschi, waiting...)*
 - info on current target for states like "Escort" *(required API requested from koonschi, waiting...)*
