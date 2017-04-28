@@ -1679,6 +1679,7 @@ function refreshOrdersUI()
             c_ord.ships.lblLoc[g][s]:hide()
             c_ord.ships.btnLook[g][s]:hide()
             c_ord.ships.cmdOrder[g][s]:hide()
+            c_ord.ships.lblOrder[g][s]:hide()
         end
     end
 
