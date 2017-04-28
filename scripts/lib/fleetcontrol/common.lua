@@ -100,6 +100,7 @@ local ordersInfo = {
     { order="Guard", text="Guard Position", script=av_script_craftorders, func="onGuardButtonPressed" },
     { order="Patrol", text="Patrol Sector", script=av_script_craftorders, func="onPatrolButtonPressed" },
     { order="Escort", text="Escort Me", script=av_script_craftorders, func="onEscortMeButtonPressed", param="playercraftindex" },
+    { order="EscortShip", text="Escort Ship", script=fc_script_controlui, func="onEscortShipButtonPressed", param="selectedcraftindex", invokecurrent=true, nongrouporder=true },
     { order="Attack", text="Attack Enemies", script=av_script_craftorders, func="onAttackEnemiesButtonPressed" },
     { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed" },
     { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed" }
@@ -384,11 +385,12 @@ function getShipAIOrderState(entity)
         -- get current ship order by looking at the AI state and attached scripts like "ai/mine.lua"
         if ai.state == AIState.Idle or 
            ai.state == AIState.Passive or 
-           ai.state == AIState.Guard or 
-           ai.state == AIState.Escort then
+           ai.state == AIState.Guard then
             order = aistate
         elseif ai.state == AIState.Aggressive then
             order = "Attack"
+        elseif ai.state == AIState.Escort then
+            order = "EscortShip"
         else
             -- get special orders
             if entity:hasScript("ai/patrol.lua") then

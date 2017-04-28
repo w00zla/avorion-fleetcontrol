@@ -62,6 +62,18 @@ local hudposdialog = {
     btnAlignBC = nil,
     btnAlignBR = nil
 }
+local shipseldialog = {
+    visible = false,
+    lastselidx = nil,
+    window = nil,
+    param = nil,
+    callback = nil,
+    selectedship = nil,
+    ships = nil,
+    lblInfo = nil,
+    lstShips = nil,
+    btnOk = nil
+}
 
 local c_ord = {
     btnPrevPage = nil,
@@ -140,8 +152,8 @@ local configCatsLastIndex
 local groupListsLastIndices = {}
 local currentPage = 1
 local selectedtabidx
-local lastshiporder = {}
-local lastgrouporder = {}
+local groupordermapping = {}
+local shipordermapping = {}
 
 -- client config buffers
 local pconfig
@@ -157,7 +169,7 @@ local shipgroups
 -- client runtime data
 local shipinfos
 local hudanchoroverride
- 
+
 -- client flags and timestamps
 local uivisible = false
 local doupdatestates = false
@@ -275,8 +287,14 @@ function onCloseWindow()
     -- handle dialog windows and related vars
     if textdialog.window then textdialog.window:hide() end
     if colordialog.window then colordialog.window:hide() end
+
     if hudposdialog.window then hudposdialog.window:hide() end
     hudanchoroverride = nil
+
+    if shipseldialog.window then 
+        shipseldialog.window:hide() 
+        shipseldialog.visible = false
+    end
 
 end
 
@@ -312,6 +330,7 @@ function initUI()
     buildTextDialog(menu, res)
     buildColorDialog(menu, res)
     buildHudPositioningDialog(menu, res)
+    buildShipSelectionDialog(menu, res)
 
     -- init with first tab
     tabs.window:selectTab(tabs.orders)
@@ -325,8 +344,21 @@ end
 
 function buildOrdersUI(parent)
 
-    local size = parent.size
+    -- create mappings
+    for _, oi in pairs(ordersInfo) do
+        if not oi.nongrouporder then
+            -- groupordermapping[oi.order] = oi.text
+            table.insert(groupordermapping, oi.text)
+        end
+        if not oi.nonshiporder then
+            -- shipordermapping[oi.order] = oi.text
+            table.insert(shipordermapping, oi.text)
+        end
+    end  
 
+    -- create widgets
+    local size = parent.size
+     
     -- footer
     c_ord.btnPrevPage = parent:createButton(Rect(10, size.y - 40, 60, size.y - 10), "<", "onPrevPagePressed")	
     c_ord.btnPrevPage.active = false
@@ -351,8 +383,8 @@ function buildOrdersUI(parent)
 
         local cbox = parent:createComboBox(split_grp.right, "onGroupOrderSelected")
         cbox:addEntry("-")
-        for _, btninfo in pairs(ordersInfo) do
-            cbox:addEntry(btninfo.text)
+        for _, ordertxt in pairs(groupordermapping) do
+            cbox:addEntry(ordertxt)
         end    
 
         c_ord.lblGroupName[g] = groupname
@@ -419,9 +451,9 @@ function buildOrdersUI(parent)
 
             local cbox = parent:createComboBox(split2.right, "onShipOrderSelected")
             cbox:addEntry("-")
-            for _, btninfo in pairs(ordersInfo) do
-                cbox:addEntry(btninfo.text)
-            end
+            for _, ordertxt in pairs(shipordermapping) do
+                cbox:addEntry(ordertxt)
+            end   
             local orderlbl = parent:createLabel(vec2(split2.right.lower.x + 5, split2.right.lower.y + 6), "", 14)
             orderlbl.font = "Arial"
 
@@ -851,12 +883,11 @@ function onGroupOrderSelected(sender)
     if ordersbusy then return end
     ordersbusy = true
 
-    local oi = ordersInfo[cbox.selectedIndex]
-    if lastgrouporder[grp] and lastgrouporder[grp] == oi.order then return end
-
-    local indices = {}
+    local oi = table.childByKeyVal(ordersInfo, "text", cbox.selectedEntry)
+    if not oi then return end
 
     -- issue orders to all group ships excluding player driven ships
+    local indices = {}
     for i, ship in pairs(shipinfos[grp]) do
         if not ship.isplayer and ship.hascaptain then
             indices[i] = ship.index
@@ -876,12 +907,12 @@ function onShipOrderSelected(sender)
         for s, cmd in pairs(c_ord.ships.cmdOrder[i]) do
             if cmd.index == sender.index then
                 if cmd.selectedIndex < 1 then return end
-                local oi = ordersInfo[cmd.selectedIndex]
-                if lastshiporder[shipinfos[g][s].name] == nil or oi.order ~= lastshiporder[shipinfos[g][s].name] then
+                local oi = table.childByKeyVal(ordersInfo, "text", cmd.selectedEntry)
+                if oi then 
                     local indices = {shipinfos[g][s].index}	
                     -- playSound("place_turret3.wav", SoundType.UI, 1)
-                    invokeOrdersScript(indices, oi)                       
-                end
+                    invokeOrdersScript(indices, oi)
+                end                   
                 break
             end
         end
@@ -1133,6 +1164,28 @@ function onPickStateColorCallback(result, color, param)
         uiconfig.statecolors[aiStates[param]] = {r=color.r,g=color.g,b=color.b}
         pconfig.ui = uiconfig
         refreshConfigUIColors()
+    end
+
+end
+
+
+function onEscortShipButtonPressed(shipidx)
+
+    if onServer() then
+        invokeClientFunction(Player(), "onEscortShipButtonPressed", shipidx)
+        return
+    end
+
+    showShipSelectionDialog("Select ship to escort:", shipidx, onEscortShipSelectionCallback)
+
+end
+
+function onEscortShipSelectionCallback(result, selectedship, param)
+
+    if result and selectedship then
+        local indices = {param}	
+        local oi = table.childByKeyVal(ordersInfo, "order", "Escort")
+        invokeOrdersScript(indices, oi, selectedship.index)                 
     end
 
 end
@@ -1391,7 +1444,6 @@ function buildHudPositioningDialog(menu, res)
     hudposdialog.btnAlignBR.tooltip = "Align HUD to bottom-right of screen"
     hudposdialog.btnAlignBR.textSize = 12
 
-    
     hudposdialog.window:hide()
 
 end
@@ -1518,6 +1570,85 @@ function showHudPositioningDialog()
 end
 
 
+function buildShipSelectionDialog(menu, res)
+
+    local size = vec2(350, 400)
+
+    shipseldialog.window = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
+    shipseldialog.window.caption = "Select Ship"
+    shipseldialog.window.visible = false
+    shipseldialog.window.showCloseButton = 1
+    shipseldialog.window.moveable = 1
+    shipseldialog.window.closeableWithEscape = 1
+
+    local split1 = UIHorizontalSplitter(Rect(vec2(0, 0), size), 30, 20, 0.5)
+    split1.bottomSize = 30
+
+    local split2 = UIHorizontalSplitter(split1.top, 10, 0, 0.5)
+    split2.topSize = 25
+
+    shipseldialog.lblInfo = shipseldialog.window:createLabel(vec2(split2.top.lower.x + 5, split2.top.lower.y), "Select ship:", 16)
+    shipseldialog.lblInfo.color = ColorRGB(0.3, 0.3, 0.3)
+    shipseldialog.lstShips = shipseldialog.window:createListBox(split2.bottom)
+
+    local xu, yu = split1.bottom.upper.x, split1.bottom.upper.y
+    shipseldialog.btnOk = shipseldialog.window:createButton(Rect(xu - 170, yu - 30, xu - 90, yu), "Select", "onShipSelectionDialogOKPressed")
+    shipseldialog.window:createButton(Rect(xu - 80, yu - 30, xu, yu), "Cancel", "onShipSelectionDialogCancelPressed")
+
+    shipseldialog.window:hide()
+
+end
+
+function onShipSelectionDialogOKPressed()
+
+    shipseldialog.window:hide()
+
+    if shipseldialog.callback and type(shipseldialog.callback) == "function" then
+        shipseldialog.callback(true, shipseldialog.selectedship, shipseldialog.param)
+    end
+
+end
+
+function onShipSelectionDialogCancelPressed()
+
+    shipseldialog.window:hide()
+    shipseldialog.visible = false
+
+end
+
+function showShipSelectionDialog(infotext, param, callback)
+
+    shipseldialog.lblInfo.caption = infotext
+    shipseldialog.lstShips:clear()
+    shipseldialog.btnOk.active = false
+
+    local sectorships = sortShipsArray(getPlayerCrafts())
+    shipseldialog.ships = {}
+    for i, ship in pairs(sectorships) do
+        if ship.index ~= param then
+            table.insert(shipseldialog.ships, ship)
+            shipseldialog.lstShips:addEntry(ship.name)
+            -- TODO: colorize Player/NoCaptain ships
+        end
+    end
+
+    shipseldialog.param = param
+    shipseldialog.callback = callback
+
+    shipseldialog.window:show()
+    shipseldialog.visible = true
+
+end
+
+function refreshShipSelectionDialog()
+
+    if shipseldialog.lstShips.selected ~= shipseldialog.lastselidx then
+        shipseldialog.lastselidx = shipseldialog.lstShips.selected
+        shipseldialog.selectedship = shipseldialog.ships[shipseldialog.lastselidx+1]
+        shipseldialog.btnOk.active = (shipseldialog.lastselidx >= 0)
+    end
+end
+
 ---- UI UPDATES ----
 
 function refreshGroupNames()
@@ -1572,10 +1703,14 @@ function refreshOrdersUI()
 
         -- pre-select group order
         if ordersequal then
-            local oi, j = table.childByKeyVal(ordersInfo, "order", lastorder)
-            if oi then
-                lastgrouporder[g] = oi.order
-                c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
+            local oi = table.childByKeyVal(ordersInfo, "order", lastorder)
+            if oi and not oi.nongrouporder then
+                for j, otxt in pairs(groupordermapping) do
+                    if otxt == oi.text then
+                        c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(j)
+                        break
+                    end
+                end
             end
         else
             c_ord.cmdGroupOrder[i]:setSelectedIndexNoCallback(0)
@@ -1635,13 +1770,14 @@ function displayShipState(g, s, ship, currloc)
             c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
             c_ord.ships.cmdOrder[g][s]:show()
             if ship.order then
-                -- set selected order to ship's current order
-                local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
-                if oi then
-                    -- TODO: escort state does not always mean ship is following player craft!
-                    --       (integrate index cache for last known target)
-                    lastshiporder[ship.name] = oi.order
-                    c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(i)
+                local oi = table.childByKeyVal(ordersInfo, "order", ship.order)
+                if oi and not oi.nonshiporder then
+                    for j, otxt in pairs(shipordermapping) do
+                        if otxt == oi.text then
+                            c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(j)
+                            break
+                        end
+                    end
                 end
             end
         end
@@ -1838,10 +1974,16 @@ end
 
 function updateUI()
 
+    -- refresh widgets in window tabs
     if selectedtabidx == tabs.groups.index then
         refreshGroupsUIButtons()
     elseif selectedtabidx == tabs.config.index then
         refreshConfigUICategory()
+    end
+
+    -- refresh widgets in dialog windows
+    if shipseldialog.visible then
+        refreshShipSelectionDialog()
     end
 
 end
@@ -2106,27 +2248,38 @@ function updateShipStates(groups, ships)
 end
 
 
-function invokeOrdersScript(shipindices, orderinfo)
+function invokeOrdersScript(shipindices, orderinfo, paramoverride)
 
     -- make this function run server-side only
     if onClient() then
-        invokeServerFunction("invokeOrdersScript", shipindices, orderinfo)
+        invokeServerFunction("invokeOrdersScript", shipindices, orderinfo, paramoverride)
         return
     end
 
     for _, idx in pairs(shipindices) do
 
-        local ship = Entity(idx)
+        local ship
+        if orderinfo.invokecurrent then
+            -- use player ship as invokation target
+            ship = Entity(Player(callingPlayer).craftIndex)
+        else   
+            ship = Entity(idx)
+        end
+
         if ship and ship.isShip then
             if not ship:hasScript(orderinfo.script) then
                 debugLog("invokeOrdersScript() --> ship: %s (%s) is missing script '%s'!", idx, orderinfo.script)
                 return
             end
-            debugLog("invokeOrdersScript() --> ship: %s (%s) | order: %s | script: %s | func: %s | param: %s", ship.name, ship.index, orderinfo.order, orderinfo.script, orderinfo.func, orderinfo.param)
-            
-            if orderinfo.param then
+            debugLog("invokeOrdersScript() --> ship: %s (%s) | order: %s | script: %s | func: %s | param: %s | paramoverride: %s", ship.name, ship.index, orderinfo.order, orderinfo.script, orderinfo.func, orderinfo.param, paramoverride)
+
+            if paramoverride then
+                ship:invokeFunction(orderinfo.script, orderinfo.func, paramoverride)
+            elseif orderinfo.param then
                 if orderinfo.param == "playercraftindex" then
                     ship:invokeFunction(orderinfo.script, orderinfo.func, Player(callingPlayer).craftIndex) 
+                elseif orderinfo.param == "selectedcraftindex" then
+                    ship:invokeFunction(orderinfo.script, orderinfo.func, idx)
                 else
                     debugLog("invokeOrdersScript() --> unknown order function parameter!", idx)
                 end
@@ -2140,7 +2293,6 @@ function invokeOrdersScript(shipindices, orderinfo)
     end
 
 end
-
 
 ---- UTILITY FUNCTIONS ----
 
