@@ -19,8 +19,8 @@ CachedConfig = require("fleetcontrol.cachedconfig")
 local modInfo = {  
     name = "FleetControl",
     author = "w00zla",
-    version = { 0, 4 },
-    clientminversion = { 0, 4 }
+    version = { 0, 5 },
+    clientminversion = { 0, 5 }
 }
 
 -- config
@@ -29,7 +29,8 @@ local configprefix = "fleetcontrol_"
 
 local sconfigdefaults = {
     updatedelay = 750,
-    enablehud = true
+    enablehud = true,
+    debugoutput = false
 }
 local pconfigdefaults = {
     groups = {
@@ -69,6 +70,8 @@ local pconfigdefaults = {
             preselectorderstab = true,
             preselectordersfirstpage = false,
             closewindowonlookat = true,
+            enableordersounds = true,
+            ordersoundfile = "fc-copy",
             statecolors = {
                 Aggressive = {r=0.9,g=0.5,b=0.2},
                 Attack = {r=0.9,g=0.7,b=0.4},
@@ -121,6 +124,12 @@ end
 
 function getConfig(scope, defaults)
     return CachedConfig(configprefix, defaults, scope)
+end
+
+function copyConfig(source)
+    local copy = CachedConfig(configprefix, source._defaults, source._scope, source._index)
+    copy._cache = source._cache
+    return copy
 end
 
 function getServerConfigDefaults()
@@ -404,5 +413,63 @@ function getShipAIOrderState(entity)
     end
 
     return aistate, order
+
+end
+
+
+-- gets all existing files in given directory
+function scandir(directory, pattern)
+
+    local i, t, popen = 0, {}, io.popen
+    --local BinaryFormat = package.cpath:match("%p[\\|/]?%p(%a+)")
+	local BinaryFormat = string.sub(package.cpath,-3)
+	local cmd = ""
+	if not string.ends(directory, "/") then
+		directory = directory .. "/"				
+	end
+	local path = directory	
+	if pattern then 	
+		path = path .. pattern
+	end
+    if BinaryFormat == "dll" then
+		path = string.gsub(path, "/", "\\")
+		cmd =   'dir "'..path..'" /b /a-d'
+    else
+		path = string.gsub(path, "\\", "/")
+		cmd = "ls " .. path
+    end
+	
+	debugLog("scandir() -> cmd: %s", cmd)
+    local pfile = popen(cmd)
+    for filename in pfile:lines() do
+		i = i + 1
+		if string.starts(filename, directory) then
+			t[i] = string.sub(filename, string.len(directory) + 1)
+		else
+			t[i] = filename
+		end		
+    end
+    pfile:close()
+    return t
+	
+end
+
+
+function getInterfaceSounds()
+
+    local soundfiles = scandir("data/sfx/interface/", "*.wav")
+
+    debugLog("getInterfaceSounds() -> soundfiles:")
+    printTable(soundfiles)
+
+    local sounds = {}
+    for i, sf in pairs(soundfiles) do
+        sounds[i] = sf:match("(.+)%..+")
+    end
+
+    debugLog("getInterfaceSounds() -> sounds:")
+    printTable(sounds)
+
+    return sounds
 
 end

@@ -85,6 +85,14 @@ local function loadValue(config, scope, index, prefix, defaults)
             -- parse JSON string for LUA variables
             val = json.parse(val)
         end
+        -- make sure every property defined in defaults is available for tables
+        if type(val) == "table" and defaults and defaults[config] and type(defaults[config]) == "table" then
+            for k, v in pairs(defaults[config]) do
+                if val[k] == nil then
+                    val[k] = v
+                end
+            end
+        end
     elseif defaults then
         -- use existing default value if present
         val = defaults[config]

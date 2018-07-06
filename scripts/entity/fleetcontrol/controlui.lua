@@ -74,6 +74,19 @@ local shipseldialog = {
     lstShips = nil,
     btnOk = nil
 }
+local soundseldialog = {
+    visible = false,
+    lastselidx = nil,
+    window = nil,
+    param = nil,
+    callback = nil,
+    selectedsound = nil,
+    sounds = nil,
+    lblInfo = nil,
+    lstSounds = nil,
+    btnOk = nil
+}
+
 
 local c_ord = {
     btnPrevPage = nil,
@@ -134,6 +147,9 @@ local c_conf = {
         chkSelectOrdersTab = nil,
         chkSelectOrdersFirstPage = nil,
         chkCloseWindowOnLookAt = nil,
+        chkEnableOrderSounds = nil,
+        lblOrderSoundFile = nil,
+        btnOrderSoundFile = nil,
     },
     uicolors = {
         picStateColorPrev = {},
@@ -157,7 +173,7 @@ local shipordermapping = {}
 
 -- client config buffers
 local pconfig
-local svals
+local sconfig
 local ordersInfo
 local aiStates
 local groupconfig
@@ -178,21 +194,28 @@ local ordersbusy = false
 local hudsubscribed = false
 local eventsactive = false
 
-
 function initialize()
 
     if onServer() then 
         -- SERVER
-        local sconfig = getConfig("server", sconfigdefaults)
-        enableDebugOutput(sconfig.debugoutput)
+        local sconfigdefaults = getServerConfigDefaults()
+        sconfig = getConfig("server", sconfigdefaults)
+        enableDebugOutput(sconfig.debugoutput) 
+        -- load all relevant options
+        for k, v in pairs(sconfigdefaults) do
+            debugLog("server config -> k: %s v: %s", k, sconfig[k])
+        end
+        deferredCallback(1, "syncServerConfig", sconfig)
         return 
     end
 
     -- CLIENT
 
     -- initial debug options
-    svals = getServerConfigDefaults()
-    enableDebugOutput(svals.debugoutput)
+    if not sconfig then
+        sconfig = getServerConfigDefaults()
+        enableDebugOutput(sconfig.debugoutput)
+    end
 
     ordersInfo = getOrdersInfo()
     aiStates = getAiStates()
@@ -209,23 +232,23 @@ function initialize()
         subscribeHudCallbacks()
         doupdatestates = true
     end
-
 end
 
 
-function syncServerValues(svalues)
+function syncServerConfig(config)
 
     if onServer() then
-        invokeClientFunction(Player(), "syncServerValues", svalues)
+        invokeClientFunction(Player(callingPlayer), "syncServerConfig", config)
         return
-    end
+    end 
 
-    svals = svalues
-    enableDebugOutput(svals.debugoutput)
+    -- re-creation of config object is required because metatable gets lost via serialization
+    sconfig = copyConfig(config)
+    enableDebugOutput(sconfig.debugoutput)
 
-    if svals.debugoutput then 
-        debugLog("synced UI script server values:")
-        printTable(svals) 
+    if sconfig.debugoutput then 
+        debugLog("synced mod server configuration:")
+        printTable(sconfig) 
     end
 
 end
@@ -299,6 +322,17 @@ function onCloseWindow()
 end
 
 
+function playOrderSound()
+
+    if uiconfig.enableordersounds and uiconfig.ordersoundfile and uiconfig.ordersoundfile ~= "" then
+        local sfPath = "interface/" .. uiconfig.ordersoundfile
+        debugLog("order sounds enabled -> playing sound '%s'", sfPath)
+        playSound(sfPath, SoundType.UI, 1)
+    end
+
+end
+
+
 function initUI()
 
     local size = vec2(900, 700)
@@ -331,6 +365,7 @@ function initUI()
     buildColorDialog(menu, res)
     buildHudPositioningDialog(menu, res)
     buildShipSelectionDialog(menu, res)
+    buildSoundSelectionDialog(menu, res)
 
     -- init with first tab
     tabs.window:selectTab(tabs.orders)
@@ -728,7 +763,7 @@ function buildConfigUI(parent)
     c_conf.cntCatUIGeneral:createLine(vec2(0, 30), vec2(rs.x, 30))
 
     local splituig1 = UIHorizontalSplitter(Rect(0, 40, rs.x, rs.y), 20, 30, 0.35)
-    local splituig2 = UIHorizontalMultiSplitter(splituig1.top, 10, 0, 2)
+    local splituig2 = UIHorizontalMultiSplitter(splituig1.top, 10, 0, 4)
 
     local r = splituig2:partition(0)
     c_conf.uigeneral.chkSelectOrdersTab = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y, r.lower.x + 350, r.lower.y + 20), "Select orders tab on window open", "onUiGeneralOptionChecked")
@@ -736,7 +771,14 @@ function buildConfigUI(parent)
     c_conf.uigeneral.chkSelectOrdersFirstPage = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y, r.lower.x + 350, r.lower.y + 20), "Select first page on orders tab", "onUiGeneralOptionChecked")
     local r = splituig2:partition(2)
     c_conf.uigeneral.chkCloseWindowOnLookAt = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y, r.lower.x + 350, r.lower.y + 20), "Close window on 'Look At' action", "onUiGeneralOptionChecked")
-    
+      
+    local r = splituig2:partition(4)
+    c_conf.uigeneral.chkEnableOrderSounds = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y + 7, r.lower.x + 205, r.lower.y + 27), "Enable order sounds", "onUiGeneralOptionChecked")
+    local sflbl = c_conf.cntCatUIGeneral:createLabel(vec2(r.lower.x + 230, r.lower.y + 12), "Sound:", 13)
+    sflbl.color = ColorRGB(0.3, 0.3, 0.3)
+    c_conf.uigeneral.lblOrderSoundFile = c_conf.cntCatUIGeneral:createLabel(vec2(r.lower.x + 290, r.lower.y + 12), "", 13)
+    c_conf.uigeneral.btnOrderSoundFile = c_conf.cntCatUIGeneral:createButton(Rect(r.lower.x + 470, r.lower.y + 7, r.upper.x, r.lower.y + 37), "Change Sound", "onChangeOrderSoundFilePressed")
+     
     -- UI Colors options
 
     c_conf.lstCategories:addEntry("UI Colors")
@@ -893,6 +935,7 @@ function onGroupOrderSelected(sender)
             indices[i] = ship.index
         end
 	end
+    playOrderSound()
     invokeOrdersScript(indices, oi)
 
 end
@@ -910,7 +953,9 @@ function onShipOrderSelected(sender)
                 local oi = table.childByKeyVal(ordersInfo, "text", cmd.selectedEntry)
                 if oi then 
                     local indices = {shipinfos[g][s].index}	
-                    -- playSound("place_turret3.wav", SoundType.UI, 1)
+                    if not oi.invokecurrent then
+                        playOrderSound()
+                    end
                     invokeOrdersScript(indices, oi)
                 end                   
                 break
@@ -1044,6 +1089,24 @@ function onRenameGroupCallback(result, text, param)
 end
 
 
+function onChangeOrderSoundFilePressed()
+ 
+    showSoundSelectionDialog("Select order sound:", "ordersound", onChangeOrderSoundFileCallback)
+
+end
+
+function onChangeOrderSoundFileCallback(result, sound, param)
+
+    if result and sound and sound ~= "" then
+        -- update UI and config with new group name
+        uiconfig.ordersoundfile = sound
+        pconfig.ui = uiconfig
+        refreshConfigUIGeneral()
+    end
+
+end
+
+
 function onGroupHudChecked(sender)
 
     if not eventsactive then return end
@@ -1139,6 +1202,7 @@ function onUiGeneralOptionChecked(sender)
     uiconfig.preselectorderstab = c_conf.uigeneral.chkSelectOrdersTab.checked
     uiconfig.preselectordersfirstpage = c_conf.uigeneral.chkSelectOrdersFirstPage.checked
     uiconfig.closewindowonlookat = c_conf.uigeneral.chkCloseWindowOnLookAt.checked
+    uiconfig.enableordersounds = c_conf.uigeneral.chkEnableOrderSounds.checked
 
     pconfig.ui = uiconfig
 
@@ -1185,6 +1249,7 @@ function onEscortShipSelectionCallback(result, selectedship, param)
     if result and selectedship then
         local indices = {param}	
         local oi = table.childByKeyVal(ordersInfo, "order", "Escort")
+        playOrderSound()
         invokeOrdersScript(indices, oi, selectedship.index)                 
     end
 
@@ -1649,6 +1714,81 @@ function refreshShipSelectionDialog()
     end
 end
 
+
+function buildSoundSelectionDialog(menu, res)
+
+    local size = vec2(350, 400)
+
+    soundseldialog.window = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
+    soundseldialog.window.caption = "Select Sound"
+    soundseldialog.window.visible = false
+    soundseldialog.window.showCloseButton = 1
+    soundseldialog.window.moveable = 1
+    soundseldialog.window.closeableWithEscape = 1
+
+    local split1 = UIHorizontalSplitter(Rect(vec2(0, 0), size), 30, 20, 0.5)
+    split1.bottomSize = 30
+
+    local split2 = UIHorizontalSplitter(split1.top, 10, 0, 0.5)
+    split2.topSize = 25
+
+    soundseldialog.lblInfo = soundseldialog.window:createLabel(vec2(split2.top.lower.x + 5, split2.top.lower.y), "Select sound:", 16)
+    soundseldialog.lblInfo.color = ColorRGB(0.3, 0.3, 0.3)
+    soundseldialog.lstSounds = soundseldialog.window:createListBox(split2.bottom)
+
+    local xu, yu = split1.bottom.upper.x, split1.bottom.upper.y
+    soundseldialog.btnOk = soundseldialog.window:createButton(Rect(xu - 170, yu - 30, xu - 90, yu), "Select", "onSoundSelectionDialogOKPressed")
+    soundseldialog.window:createButton(Rect(xu - 80, yu - 30, xu, yu), "Cancel", "onShipSelectionDialogCancelPressed")
+
+    soundseldialog.window:hide()
+
+end
+
+function onSoundSelectionDialogOKPressed()
+
+    soundseldialog.window:hide()
+
+    if soundseldialog.callback and type(soundseldialog.callback) == "function" then
+        soundseldialog.callback(true, soundseldialog.selectedsound, soundseldialog.param)
+    end
+
+end
+
+function onSoundSelectionDialogCancelPressed()
+
+    soundseldialog.window:hide()
+    soundseldialog.visible = false
+
+end
+
+function showSoundSelectionDialog(infotext, param, callback)
+
+    soundseldialog.lblInfo.caption = infotext
+    soundseldialog.lstSounds:clear()
+    soundseldialog.btnOk.active = false
+
+    soundseldialog.sounds = getInterfaceSounds()
+    for _, sound in pairs(soundseldialog.sounds) do
+        soundseldialog.lstSounds:addEntry(sound)
+    end
+
+    soundseldialog.param = param
+    soundseldialog.callback = callback
+
+    soundseldialog.window:show()
+    soundseldialog.visible = true
+
+end
+
+function refreshSoundSelectionDialog()
+
+    if soundseldialog.lstSounds.selected ~= soundseldialog.lastselidx then
+        soundseldialog.lastselidx = soundseldialog.lstSounds.selected
+        soundseldialog.selectedsound = soundseldialog.sounds[soundseldialog.lastselidx+1]
+        soundseldialog.btnOk.active = (soundseldialog.lastselidx >= 0)
+    end
+end
+
 ---- UI UPDATES ----
 
 function refreshGroupNames()
@@ -1918,7 +2058,7 @@ function refreshConfigUIHud()
     c_conf.hud.chkShowHud.checked = hudconfig.showhud
     c_conf.hud.btnPosHud.active = hudconfig.showhud
 
-    if not svals.enablehud then
+    if not sconfig.enablehud then
         c_conf.hud.chkShowHud:hide()
         c_conf.hud.btnPosHud:hide()
         c_conf.hud.lblHudNotice:show()
@@ -1949,6 +2089,8 @@ function refreshConfigUIGeneral()
     c_conf.uigeneral.chkSelectOrdersTab.checked = uiconfig.preselectorderstab
     c_conf.uigeneral.chkSelectOrdersFirstPage.checked = uiconfig.preselectordersfirstpage
     c_conf.uigeneral.chkCloseWindowOnLookAt.checked = uiconfig.closewindowonlookat
+    c_conf.uigeneral.chkEnableOrderSounds.checked = uiconfig.enableordersounds
+    c_conf.uigeneral.lblOrderSoundFile.caption = uiconfig.ordersoundfile or ""
 
     eventsactive = true
 
@@ -1986,17 +2128,21 @@ function updateUI()
     if shipseldialog.visible then
         refreshShipSelectionDialog()
     end
+    if soundseldialog.visible then
+        refreshSoundSelectionDialog()
+    end
 
 end
 
 
 function updateClient(timeStep)
 
-    if doupdatestates and svals then
+    if doupdatestates and sconfig then
+        
+        laststateupdate = laststateupdate + (timeStep * 1000)
 
-        local current = systemTimeMs()
         -- only do update if configured delay has passed
-        if svals.updatedelay and (current - laststateupdate) >= svals.updatedelay then
+        if sconfig.updatedelay and laststateupdate >= sconfig.updatedelay then
 
             -- get latest values for relevant player configs (since other scripts could have changed these)
             pconfig = getConfig("player", getPlayerConfigDefaults())
@@ -2038,9 +2184,9 @@ function updateClient(timeStep)
             -- update ship states and refresh ships UI widgets
             updateShipStates(shipgroups, sectorships)
 
-            laststateupdate = current
+            laststateupdate = 0
             ordersbusy = false
-        end
+        end     
     end
 
 end
@@ -2049,7 +2195,7 @@ end
 function onPreRenderHud()
 
     -- draw HUD elements if enabled
-    if shipinfos and svals and svals.enablehud and hudconfig and hudconfig.showhud then
+    if shipinfos and sconfig and sconfig.enablehud and hudconfig and hudconfig.showhud then
     
         local coords = vec2(Sector():getCoordinates())
 

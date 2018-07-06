@@ -16,11 +16,14 @@ require "stringutility"
 
 require "fleetcontrol.common"
 
+-- namespace FleetControlManager
+FleetControlManager = {}
+
 
 local lastCraft
 
 
-function initialize()
+function FleetControlManager.initialize()
 
     if onClient() then return end -- only init server-side
 
@@ -34,7 +37,7 @@ function initialize()
 end
 
 
-function requestClientVersion()
+function FleetControlManager.requestClientVersion()
 
     if onServer() then
         invokeClientFunction(Player(), "requestClientVersion")
@@ -42,15 +45,16 @@ function requestClientVersion()
     end
     
     local cmodinfo = getModInfo()
+
     scriptLog(nil, "client mod version requested by server -> %s", getVersionString(cmodinfo.version))
 
     -- send result back to server
-    validateClientVersion(cmodinfo.version)
+    FleetControlManager.validateClientVersion(cmodinfo.version)
 
 end
 
 
-function validateClientVersion(cversion)
+function FleetControlManager.validateClientVersion(cversion)
 
     if onClient() then
         invokeServerFunction("validateClientVersion", cversion)
@@ -65,7 +69,8 @@ function validateClientVersion(cversion)
         -- client version is valid for server version
         debugLog("successfully validated mod versions (server: %s | clientminversion: %s | client: %s)", getVersionString(smodinfo.version), getVersionString(cminversion), getVersionString(cversion))
         -- continue script loading etc.
-        initShipUIHandling(player)
+        deferredCallback(1, "initShipUIHandling", player)
+        --FleetControlManager.initShipUIHandling(player)
     else
         -- invalid/outdated client version
         scriptLog(player, "invalid client mod versions, aborted loading of scripts (server: %s | clientminversion: %s | client: %s)", getVersionString(smodinfo.version), getVersionString(cminversion), getVersionString(cversion))
@@ -77,7 +82,7 @@ function validateClientVersion(cversion)
 end
 
 
-function initShipUIHandling(player)
+function FleetControlManager.initShipUIHandling(player)
 
     -- subscribe to event callbacks
     player:registerCallback("onShipChanged", "onShipChanged")	
@@ -86,25 +91,25 @@ function initShipUIHandling(player)
     Server():registerCallback("onPlayerLogOff", "onPlayerLogOff")
 
     -- add UI script
-    addShipUIScript(player.craftIndex) 
+    FleetControlManager.addShipUIScript(player.craftIndex) 
 
 end
 
 
-function onPlayerLogOff(playerIndex)
+function FleetControlManager.onPlayerLogOff(playerIndex)
 
     debugLog("onPlayerLogOff() -> playerIndex: %s", playerIndex)
 
     local player = Player(playerIndex)
     if lastCraft then 
         -- ensure UI scripts are deattached
-        removeShipUIScript(lastCraft)	
+        FleetControlManager.removeShipUIScript(lastCraft)	
     end
 
 end
 
 
-function onShipChanged(playerIndex, craftIndex)
+function FleetControlManager.onShipChanged(playerIndex, craftIndex)
 
     debugLog("onShipChanged() -> playerIndex: %s | craftIndex: %s", playerIndex, craftIndex)
 
@@ -113,62 +118,47 @@ function onShipChanged(playerIndex, craftIndex)
 
     --add and remove UI script for ship entities
     if lastCraft then
-        removeShipUIScript(lastCraft)	
+        FleetControlManager.removeShipUIScript(lastCraft)	
     end
-    addShipUIScript(craftIndex)	
+    FleetControlManager.addShipUIScript(craftIndex)	
 
 end
 
 
-function onDestroyed(index, lastDamageInflictor) 
+function FleetControlManager.onDestroyed(index, lastDamageInflictor) 
 
     debugLog("onDestroyed()")
-    removePlayerShip(index)
+    FleetControlManager.removePlayerShip(index)
 
 end
 
 
-function onSectorEntered(playerIndex, x, y) 
+function FleetControlManager.onSectorEntered(playerIndex, x, y) 
 
     Sector():registerCallback("onDestroyed", "onDestroyed")
-    updateSectorPlayerShips()
+    FleetControlManager.updateSectorPlayerShips()
 
 end
 
 
-function addShipUIScript(shipidx)
+function FleetControlManager.addShipUIScript(shipidx)
 
     -- add script to ship entity
-    if shipidx and shipidx > 0 and lastCraft ~= shipidx then
+    if shipidx and lastCraft ~= shipidx then
         local entity = Entity(shipidx)
         if entity and valid(entity) then
             ensureEntityScript(entity, fc_script_controlui)
             lastCraft = entity.index
-            -- push server config values to client UI script
-            pushShipUIServerConfig(entity)
         end
     end
 
 end
 
 
-function pushShipUIServerConfig(entity)
-
-    local sconfig = getConfig("server", getServerConfigDefaults())
-    local svalues = { 
-        updatedelay = sconfig.updatedelay, 
-        debugoutput = sconfig.debugoutput,  
-        enablehud = sconfig.enablehud
-    }
-    entity:invokeFunction(fc_script_controlui, "syncServerValues", svalues)
-
-end
-
-
-function removeShipUIScript(shipidx)
+function FleetControlManager.removeShipUIScript(shipidx)
 
     -- remove scripts(s) from player ship
-    if shipidx and shipidx > 0 then
+    if shipidx then
         local entity = Entity(shipidx)
         if entity and valid(entity) then
             removeEntityScript(entity, fc_script_controlui)
@@ -181,25 +171,25 @@ function removeShipUIScript(shipidx)
 end
 
 
-function removeAllScripts()
+function FleetControlManager.removeAllScripts()
 
     local player = Player()
     local shipidx = player.craftIndex
 
     --add and remove UI script for ship entities
-    removeShipUIScript(shipidx)
+    FleetControlManager.removeShipUIScript(shipidx)
     if lastCraft and lastCraft ~= shipidx then
-        removeShipUIScript(lastCraft)	
+        FleetControlManager.removeShipUIScript(lastCraft)	
     end
 
     -- TODO: remove all scripts from every entity when non-UI entity scripts are added
 
     -- remove myself
-    terminate()
+    FleetControlManager.terminate()
 end
 
 
-function removePlayerShip(index)
+function FleetControlManager.removePlayerShip(index)
 
     local entity = Entity(index)
     if entity and valid(entity) then
@@ -236,7 +226,7 @@ function removePlayerShip(index)
 end
 
 
-function updateSectorPlayerShips()
+function FleetControlManager.updateSectorPlayerShips()
 
     local pconfig = getConfig("player", getPlayerConfigDefaults())
     local knownships = pconfig.knownships
@@ -282,14 +272,14 @@ function updateSectorPlayerShips()
 end
 
 
-function updateServerConfig()
+function FleetControlManager.updateServerConfig()
 
     local player = Player()
     if player.craftIndex and player.craftIndex > 0 then
         local entity = Entity(player.craftIndex)
         if entity and valid(entity) then
             -- push server config values to client UI script
-            pushShipUIServerConfig(entity)
+            FleetControlManager.pushShipUIServerConfig(entity)
         end
     end
 
