@@ -1,6 +1,7 @@
 # FleetControl
 
 ![compatibility-beta](https://img.shields.io/badge/avorion--beta-v0.18-blue.svg) 
+![compatibility-stable](https://img.shields.io/badge/avorion--stable-v0.17.1-green.svg) 
 
 ### Description
 
@@ -105,7 +106,6 @@ currently, its not possible to get the ships (escort) target via script, so the 
     * order "Collect Loot"
 - improvements for multiplayer:
     * improved state-handling for out-of-sector ships
-    * improved handling for alliance ships
     * recognize if ships are controlled by other players
 - ~~add sounds for actions like "give order" (with config)~~
 - notifications for orders and other events (with config)
