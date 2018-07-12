@@ -12,42 +12,48 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 
 require "fleetcontrol.common"
 
+-- namespace FleetControlCommand
+FleetControlCommand = {}
 
-function execute(sender, commandName, ...)
+local Me = FleetControlCommand
+local Co = FleetControlCommon
+
+
+function FleetControlCommand.execute(sender, commandName, ...)
 	local args = {...}	
 	local player = Player(sender)	
-    local modinfo = getModInfo()
+    local modinfo = Co.getModInfo()
 
 	if #args == 0 or args[1] == "enable" then	
 	
 		-- make sure entity scripts are present
-		ensureEntityScript(player, fc_script_manager)
-		scriptLog(player, "UI was enabled  -> manager script attached to player")
-		player:sendChatMessage(modinfo.name, 0, "'Fleet Control' UI was enabled")
+		Co.ensureEntityScript(player, Co.fc_script_manager)
+		Co.scriptLog(player, "UI was enabled  -> manager script attached to player")
+		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "'Fleet Control' UI was enabled")
 		
 	elseif args[1] == "disable" then
 		
-		if player:hasScript(fc_script_manager) then
-			player:invokeFunction(fc_script_manager, "removeAllScripts")		
-			scriptLog(player, "all scripts have been removed")
+		if player:hasScript(Co.fc_script_manager) then
+			player:invokeFunction(Co.fc_script_manager, "removeAllScripts")		
+			Co.scriptLog(player, "all scripts have been removed")
 		end			
-		player:sendChatMessage(modinfo.name, 0, "'Fleet Control' UI was disabled")
+		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "'Fleet Control' UI was disabled")
 		
 	else
-		player:sendChatMessage(modinfo.name, 0, "Missing parameters! Use '/help fleetcontrol' for information.")
+		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Missing parameters! Use '/help fleetcontrol' for information.")
 	end
 
     return 0, "", ""
 end
 
 
-function getDescription()
+function FleetControlCommand.getDescription()
     return "Enables/disables the UI (menu item & window) for FleetControl mod."
 end
 
 
 -- called by /help command
-function getHelp()
+function FleetControlCommand.getHelp()
     return [[
 Enables/disables the UI (menu item & window) for FleetControl mod.
 Usage:

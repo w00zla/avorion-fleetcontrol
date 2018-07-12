@@ -13,7 +13,6 @@ package.path = package.path .. ";data/scripts/lib/fleetcontrol/?.lua"
 
 json = require("json")
 
-
 local CachedConfig = {
     _scope = "server",
     _index = nil,
@@ -51,7 +50,7 @@ local function new(prefix, defaults, scope, index)
 end
 
 
-local function getTargetByScope(scope, index)
+function CachedConfig_GetTargetByScope(scope, index)
 
     if scope == "entity" then
         return Entity(index)
@@ -66,12 +65,12 @@ local function getTargetByScope(scope, index)
 end
 
 
-local function loadValue(config, scope, index, prefix, defaults)
+function CachedConfig_LoadValue(config, scope, index, prefix, defaults)
 
     local storagekey = prefix .. config
 
     -- get config target
-    local target = getTargetByScope(scope, index)
+    local target = CachedConfig_GetTargetByScope(scope, index)
     if not target then
         print(string.format("CachedConfig => invalid config target (scope: %s | index: %s)", scope, index))
         return
@@ -102,9 +101,7 @@ local function loadValue(config, scope, index, prefix, defaults)
 end
 
 
-local function saveValue(scope, index, prefix, config, value)
-
-    local storagekey = prefix .. config
+function CachedConfig_StringifyValue(value)
 
     local vt = type(value)
     if vt == "function" or vt == "userdata" or vt == "thread" then 
@@ -120,28 +117,27 @@ local function saveValue(scope, index, prefix, config, value)
         end
     end
 
-    -- save value to target storage via server-side call (required!)
-    CachedConfig_CommitSave(scope, index, storagekey, value)
-    
+    return value
+
 end
 
 
-function CachedConfig_CommitSave(scope, index, config, val)
+function CachedConfig_CommitSave(config)
 
-    -- force this function to run server-side only
-    if onClient() then
-        invokeServerFunction("CachedConfig_CommitSave", scope, index, config, val)
-        return
-    end
+    -- this function is required to run server-side only!!
 
     -- get config target
-    local target = getTargetByScope(scope, index)
+    local target = CachedConfig_GetTargetByScope(config._scope, config._index)
 
     if target then
         -- persist value in targets storage
-        target:setValue(config, val)
+        for k, v in pairs(config._cache) do  
+            local storagekey = config._prefix .. k
+            local storageval = CachedConfig_StringifyValue(v)
+            target:setValue(storagekey, storageval)
+        end     
     else
-        print(string.format("CachedConfig => invalid config target (scope: %s | index: %s)", scope, index))
+        print(string.format("CachedConfig => invalid config target (scope: %s | index: %s)", config._scope, config._index))
     end
 
 end
@@ -160,7 +156,7 @@ CachedConfig.__index = function(t, k)
     if cache[k] == nil then 
         -- load value from storage and cache result in table 
         local s, i, p, d = getParams(t)
-        value = loadValue(k, s, i, p, d)
+        value = CachedConfig_LoadValue(k, s, i, p, d)
         cache[k] = value
     end
     return cache[k]
@@ -170,9 +166,6 @@ end
 -- wrap the assignment of property values
 CachedConfig.__newindex = function(t, k, v)  
     local cache = rawget(t, "_cache")
-    -- save value to storage and update cached result in table 
-    local s, i, p = getParams(t)
-    saveValue(s, i, p, k, v)
     cache[k] = v
 end
 

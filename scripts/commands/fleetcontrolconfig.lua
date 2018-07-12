@@ -12,11 +12,17 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 
 require "fleetcontrol.common"
 
+-- namespace FleetControlConfigCommand
+FleetControlConfigCommand = {}
+
+local Me = FleetControlConfigCommand
+local Co = FleetControlCommon
+
 
 local modinfo
 
 
-function execute(sender, commandName, ...)
+function FleetControlConfigCommand.execute(sender, commandName, ...)
 	local args = {...}	
 	local player = Player(sender)	
     modinfo = getModInfo()
@@ -30,14 +36,14 @@ function execute(sender, commandName, ...)
 		updateConfig(player, configkey, configval)
 
 	else
-		player:sendChatMessage(modinfo.name, 0, "Missing parameters! Use '/help fleetcontrolconfig' for information.")	
+		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Missing parameters! Use '/help fleetcontrolconfig' for information.")	
 	end
 
     return 0, "", ""
 end
 
 
-function updateConfig(player, configkey, configval)
+function FleetControlConfigCommand.updateConfig(player, configkey, configval)
 
 	local valid = false
 	local paramtype = ""
@@ -59,7 +65,7 @@ function updateConfig(player, configkey, configval)
 	else
 		-- unknown config
 		scriptLog(player, "unknown server configuration (key: %s | val: %s)", configkey, configval)
-		player:sendChatMessage(modinfo.name, 0, "Error: Unknown server configuration '%s'!", configkey)
+		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Error: Unknown server configuration '%s'!", configkey)
 		return
     end
 
@@ -67,7 +73,7 @@ function updateConfig(player, configkey, configval)
 		-- valid update -> save config
 		sconfig[configkey] = configval		
 		scriptLog(player, "server configuration updated -> key: %s | val: %s", configkey, configval)
-		player:sendChatMessage(modinfo.name, 0, "Server configuration updated successfully")
+		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Server configuration updated successfully")
 		-- trigger server config update for all relevant players
 		local playerIndices = {}
 		local onlinePlayers = Galaxy():getOnlinePlayerNames()
@@ -76,7 +82,7 @@ function updateConfig(player, configkey, configval)
 			table.insert(playerIndices, player.index)
 		else
 			for index, name in pairs(onlinePlayers) do
-				if Player(index):hasScript(fc_script_manager) then
+				if Player(index):hasScript(Co.fc_script_manager) then
 					table.insert(playerIndices, index)
 				end
 			end
@@ -87,25 +93,25 @@ function updateConfig(player, configkey, configval)
 		end
 		for _, idx in pairs(playerIndices) do
 			debugLog("update config -> triggering server config update in scripts for player %i", idx)
-			Player(idx):invokeFunction(fc_script_manager, "updateServerConfig") 
+			Player(idx):invokeFunction(Co.fc_script_manager, "updateServerConfig") 
 		end
 	else
 		-- invalid value	
 		local paramtypelabel = getParamTypeLabel(paramtype)
 		scriptLog(player, "invalid server configuration value (key: %s | val: %s | paramtype: %s)", configkey, configval, paramtype)
-		player:sendChatMessage(modinfo.name, 0, "Error: %s parameter required for config '%s'!", paramtypelabel, configkey)
+		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Error: %s parameter required for config '%s'!", paramtypelabel, configkey)
 	end
 
 end
 
 
-function getDescription()
+function FleetControlConfigCommand.getDescription()
     return "Configuration helper for the FleetControl mod."
 end
 
 
 -- called by /help command
-function getHelp()
+function FleetControlConfigCommand.getHelp()
     return [[
 Configuration helper for the FleetControl mod.
 Usage:

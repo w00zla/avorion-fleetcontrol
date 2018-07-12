@@ -15,6 +15,12 @@ require "stringutility"
 
 CachedConfig = require("fleetcontrol.cachedconfig")
 
+-- namespace FleetControlCommon
+FleetControlCommon = {}
+
+local Me = FleetControlCommon
+
+
 -- MODINFO
 local modInfo = {  
     name = "FleetControl",
@@ -36,27 +42,27 @@ local pconfigdefaults = {
     groups = {
             {
                 name="Group 1",
-                showhud=false,
+                showhud=true,
                 hudcolor={a=0.5,r=1,g=1,b=1}
             },
             {
                 name="Group 2",
-                showhud=false,
+                showhud=true,
                 hudcolor={a=0.5,r=0.75,g=0.75,b=0.75}
             },
             {
                 name="Group 3",
-                showhud=false,
+                showhud=true,
                 hudcolor={a=0.5,r=0.5,g=0.5,b=0.5}
             },
             {
                 name="Group 4",
-                showhud=false,
+                showhud=true,
                 hudcolor={a=0.5,r=0.25,g=0.25,b=0.25}
             }    
         },
     hud = {
-            showhud = false,
+            showhud = true,
             hudanchor = {x=50,y=50},
             hudstyle = 0,
             showgroupnames = true,
@@ -71,7 +77,7 @@ local pconfigdefaults = {
             preselectordersfirstpage = false,
             closewindowonlookat = true,
             enableordersounds = true,
-            ordersoundfile = "fc-copy",
+            ordersoundfile = "fc-affirmative,fc-copy,fc-roger",
             statecolors = {
                 Aggressive = {r=0.9,g=0.5,b=0.2},
                 Attack = {r=0.9,g=0.7,b=0.4},
@@ -91,22 +97,23 @@ local pconfigdefaults = {
 }
 
 -- globals
-fc_script_manager = "data/scripts/player/fleetcontrol/manager.lua"
-fc_script_controlui = "data/scripts/entity/fleetcontrol/controlui.lua"
-av_script_craftorders = "data/scripts/entity/craftorders.lua"
+FleetControlCommon.fc_script_manager = "data/scripts/player/fleetcontrol/manager.lua"
+FleetControlCommon.fc_script_controlui = "data/scripts/entity/fleetcontrol/controlui.lua"
+FleetControlCommon.fc_script_craftorders = "data/scripts/entity/fleetcontrol/fccraftorders.lua"
 
 -- other stuff
 
 local ordersInfo = {
-    { order="Idle", text="Idle", script=av_script_craftorders, func="onIdleButtonPressed" },
-    { order="Passive", text="Passive", script=av_script_craftorders, func="onPassiveButtonPressed" },
-    { order="Guard", text="Guard Position", script=av_script_craftorders, func="onGuardButtonPressed" },
-    { order="Patrol", text="Patrol Sector", script=av_script_craftorders, func="onPatrolButtonPressed" },
-    { order="Escort", text="Escort Me", script=av_script_craftorders, func="onEscortMeButtonPressed", param="playercraftindex" },
-    { order="EscortShip", text="Escort Ship", script=fc_script_controlui, func="onEscortShipButtonPressed", param="selectedcraftindex", invokecurrent=true, nongrouporder=true },
-    { order="Attack", text="Attack Enemies", script=av_script_craftorders, func="onAttackEnemiesButtonPressed" },
-    { order="Mine", text="Mine", script=av_script_craftorders, func="onMineButtonPressed" },
-    { order="Salvage", text="Salvage", script=av_script_craftorders, func="onSalvageButtonPressed" }
+    { order="Idle", text="Idle"%_t, script=Me.fc_script_craftorders, func="onIdleButtonPressed" },
+    { order="Passive", text="Passive"%_t, script=Me.fc_script_craftorders, func="stopFlying" },
+    { order="Guard", text="Guard Position"%_t, script=Me.fc_script_craftorders, func="onGuardButtonPressed" },
+    { order="Patrol", text="Patrol Sector"%_t, script=Me.fc_script_craftorders, func="onPatrolButtonPressed" },
+    { order="Escort", text="Escort Me"%_t, script=Me.fc_script_craftorders, func="escortEntity", param="playercraftindex" },
+    --{ order="Follow", text="Follow Me"%_t, script=Me.av_script_craftorders, func="followEntity", param="playercraftindex" },
+    { order="EscortShip", text="Escort Ship"%_t, script=Me.fc_script_controlui, func="onEscortShipButtonPressed", param="selectedcraftindex", invokecurrent=true, nongrouporder=true },
+    { order="Attack", text="Attack Enemies"%_t, script=Me.fc_script_craftorders, func="onAttackEnemiesButtonPressed" },
+    { order="Mine", text="Mine"%_t, script=Me.fc_script_craftorders, func="onMineButtonPressed" },
+    { order="Salvage", text="Salvage"%_t, script=Me.fc_script_craftorders, func="onSalvageButtonPressed" },
 }
 
 local aiStates = {
@@ -117,55 +124,71 @@ local aiStates = {
 local paramtypelabels = { pnum="Number", bool="Boolean" }
 
 
-function enableDebugOutput(enable)
+function FleetControlCommon.enableDebugOutput(enable)
     debugoutput = enable or false
 end
 
 
-function getConfig(scope, defaults)
-    return CachedConfig(configprefix, defaults, scope)
+function FleetControlCommon.getConfig(scope, defaults)
+    local config = CachedConfig(configprefix, defaults, scope)
+    if defaults then
+        for k, v in pairs(defaults) do
+            local cval = config[k]
+            Me.debugLog("%s config value loaded -> k: %s v: %s", scope, k, cval)
+        end
+    end
+    return config
 end
 
-function copyConfig(source)
+
+function FleetControlCommon.copyConfig(source)
     local copy = CachedConfig(configprefix, source._defaults, source._scope, source._index)
     copy._cache = source._cache
     return copy
 end
 
-function getServerConfigDefaults()
+function FleetControlCommon.saveConfig(config)
+    if config then
+        --Me.debugLog("persisting %s configuration...", config._scope)
+        CachedConfig_CommitSave(config)
+    end
+end
+
+
+function FleetControlCommon.getServerConfigDefaults()
     return sconfigdefaults
 end
 
-function getPlayerConfigDefaults()
+function FleetControlCommon.getPlayerConfigDefaults()
     return pconfigdefaults
 end
 
 
-function getOrdersInfo()
+function FleetControlCommon.getOrdersInfo()
     return ordersInfo
 end
 
-function getAiStates()
+function FleetControlCommon.getAiStates()
     return aiStates
 end
 
 
-function getModInfo()
+function FleetControlCommon.getModInfo()
     return modInfo
 end
 
-function getVersionString(version)
+function FleetControlCommon.getVersionString(version)
     if version then
         return string.format("v%i.%i", version[1],  version[2])
     end
 end
 
-function getModInfoLine()
-    return string.format("%s [%s] by %s", modInfo.name, getVersionString(modInfo.version), modInfo.author)
+function FleetControlCommon.getModInfoLine()
+    return string.format("%s [%s] by %s", modInfo.name, Me.getVersionString(modInfo.version), modInfo.author)
 end
 
 
-function shortenText(text, maxlen)
+function FleetControlCommon.shortenText(text, maxlen)
 
     if text then
         if string.len(text) > maxlen then
@@ -177,13 +200,13 @@ function shortenText(text, maxlen)
 end
 
 
-function formatPosition(pos)
+function FleetControlCommon.formatPosition(pos)
     return string.format("X=%i Y=%i", pos.x, pos.y)
 end
 
 
 -- validate parameter value based on type
-function validateParameter(paramval, paramtype)
+function FleetControlCommon.validateParameter(paramval, paramtype)
 
 	-- paramvalidate config paramvalues by type
 	if paramval and paramval ~= "" then
@@ -209,7 +232,7 @@ end
 
 
 -- get nice titles for parameter-types
-function getParamTypeLabel(paramtype)
+function FleetControlCommon.getParamTypeLabel(paramtype)
 
 	local paramtypelabel = paramtype
 	if paramtypelabels[paramtype] then
@@ -221,7 +244,7 @@ end
 
 
 -- attaches script to entity if not already existing
-function ensureEntityScript(entity, entityscript, ...)
+function FleetControlCommon.ensureEntityScript(entity, entityscript, ...)
     
     if tonumber(entity) then
         entity = Entity(entity)
@@ -229,13 +252,13 @@ function ensureEntityScript(entity, entityscript, ...)
     
     if entity and not entity:hasScript(entityscript) then
         entity:addScriptOnce(entityscript, ...)
-        debugLog("script was added to entity (index: %s, script: %s)", entity.index, entityscript)
+        Me.debugLog("script was added to entity (index: %s, script: %s)", entity.index, entityscript)
     end
 
 end
 
 
-function removeEntityScript(entity, entityscript)
+function FleetControlCommon.removeEntityScript(entity, entityscript)
 
     if tonumber(entity) then
         entity = Entity(entity)
@@ -243,25 +266,25 @@ function removeEntityScript(entity, entityscript)
 
     if entity and entity:hasScript(entityscript) then
         entity:removeScript(entityscript)
-        debugLog("script was removed from entity (index: %s, script: %s)", entity.index, entityscript)
+        Me.debugLog("script was removed from entity (index: %s, script: %s)", entity.index, entityscript)
     end	
 
 end
 
 
-function scriptLog(player, msg, ...)
+function FleetControlCommon.scriptLog(player, msg, ...)
 
     if msg and msg ~= "" then 
         local pinfo = ""
         if player then pinfo = " p#" .. tostring(player.index) end
-        local prefix = string.format("SCRIPT %s [%s]%s => ", modInfo.name, getVersionString(modInfo.version), pinfo)
-        printsf(prefix .. msg, ...)
+        local prefix = string.format("SCRIPT %s [%s]%s => ", modInfo.name, Me.getVersionString(modInfo.version), pinfo)
+        Me.printsf(prefix .. msg, ...)
     end
     
 end
 
 
-function debugLog(msg, ...)
+function FleetControlCommon.debugLog(msg, ...)
 
     if debugoutput and msg and msg ~= "" then
         local pinfo = ""
@@ -269,14 +292,14 @@ function debugLog(msg, ...)
             local player = Player()
             if player then pinfo = " p#" .. tostring(player.index) end
         end
-        local prefix = string.format("SCRIPT %s [%s]%s DEBUG => ", modInfo.name, getVersionString(modInfo.version), pinfo)
-        printsf(prefix .. msg, ...)
+        local prefix = string.format("SCRIPT %s [%s]%s DEBUG => ", modInfo.name, Me.getVersionString(modInfo.version), pinfo)
+        Me.printsf(prefix .. msg, ...)
     end
     
 end
 
 
-function printsf(message, ...)
+function FleetControlCommon.printsf(message, ...)
 
     message = string.format(message, ...)
     print(message)
@@ -284,7 +307,7 @@ function printsf(message, ...)
 end
 
 
-function table.contains(table, value)
+function FleetControlCommon.table_contains(table, value)
 
     for _, v in pairs(table) do
         if v == value then return true end
@@ -293,7 +316,7 @@ function table.contains(table, value)
 
 end
 
-function table.childByKeyVal(table, key, value)
+function FleetControlCommon.table_childByKeyVal(table, key, value)
 
     for i, t in pairs(table) do
         if type(t) == "table" and t[key] == value then
@@ -305,7 +328,7 @@ end
 
 
 -- source: http://notebook.kulchenko.com/algorithms/alphanumeric-natural-sorting-for-humans-in-lua
-function alphanumsort(o)
+function FleetControlCommon.alphanumsort(o)
 
   local function padnum(d) return ("%03d%s"):format(#d, d) end
   table.sort(o, function(a,b)
@@ -313,7 +336,7 @@ function alphanumsort(o)
   return o
 
 end
-function sortShipsArray(o)
+function FleetControlCommon.sortShipsArray(o)
 
   local function padnum(d) return ("%03d%s"):format(#d, d) end
   table.sort(o, function(a,b)
@@ -323,7 +346,7 @@ function sortShipsArray(o)
 end
 
 
-function checkShipCaptain(entity)
+function FleetControlCommon.checkShipCaptain(entity)
 
     if entity.isShip then
         local captains = entity:getCrewMembers(CrewProfessionType.Captain)
@@ -333,15 +356,26 @@ function checkShipCaptain(entity)
 end
 
 
-function getPlayerCrafts()
+function FleetControlCommon.getPlayerCrafts()
 
     local ships = {}
     local player = Player()
 
+    -- player owned ships
     local playerentities = {Sector():getEntitiesByFaction(player.index)}
     for _, e in pairs(playerentities) do
         if e.isShip then
             table.insert(ships, { name=e.name, index=e.index })
+        end
+    end
+
+    -- manageable alliance ships
+    if player.alliance then
+        local allyentities = {Sector():getEntitiesByFaction(player.allianceIndex)}
+        for _, e in pairs(allyentities) do
+            if e.isShip and checkEntityInteractionPermissions(e, AlliancePrivilege.FlyCrafts) then
+                table.insert(ships, { name=e.name, index=e.index })
+            end
         end
     end
 
@@ -350,7 +384,7 @@ function getPlayerCrafts()
 end
 
 
-function getAIStateString(state)
+function FleetControlCommon.getAIStateString(state)
 
     local aistate = "-"
 
@@ -383,13 +417,13 @@ function getAIStateString(state)
 end
 
 
-function getShipAIOrderState(entity)
+function FleetControlCommon.getShipAIOrderState(entity)
 
     local aistate, order
 
     local ai = ShipAI(entity.index)
     if ai then
-        aistate = getAIStateString(ai.state)
+        aistate = Me.getAIStateString(ai.state)
         
         -- get current ship order by looking at the AI state and attached scripts like "ai/mine.lua"
         if ai.state == AIState.Idle or 
@@ -400,6 +434,8 @@ function getShipAIOrderState(entity)
             order = "Attack"
         elseif ai.state == AIState.Escort then
             order = "EscortShip"
+        elseif ai.state == AIState.Follow then
+            order = "Follow"
         else
             -- get special orders
             if entity:hasScript("ai/patrol.lua") then
@@ -408,6 +444,12 @@ function getShipAIOrderState(entity)
                 order = "Mine"
             elseif entity:hasScript("ai/salvage.lua") then
                 order = "Salvage"
+            elseif entity:hasScript("ai/haulgoods.lua") then
+                order = "Haul Goods"
+			elseif entity:hasScript("ai/clean.lua") then
+                order = "Remove asteroids"
+			elseif entity:hasScript("ai/cleanBreeders.lua") then
+                order = "Remove breeders"
             end
         end
     end
@@ -418,7 +460,7 @@ end
 
 
 -- gets all existing files in given directory
-function scandir(directory, pattern)
+function FleetControlCommon.scandir(directory, pattern)
 
     local i, t, popen = 0, {}, io.popen
     --local BinaryFormat = package.cpath:match("%p[\\|/]?%p(%a+)")
@@ -439,7 +481,7 @@ function scandir(directory, pattern)
 		cmd = "ls " .. path
     end
 	
-	debugLog("scandir() -> cmd: %s", cmd)
+	Me.debugLog("scandir() -> cmd: %s", cmd)
     local pfile = popen(cmd)
     for filename in pfile:lines() do
 		i = i + 1
@@ -455,11 +497,11 @@ function scandir(directory, pattern)
 end
 
 
-function getInterfaceSounds()
+function FleetControlCommon.getInterfaceSounds()
 
-    local soundfiles = scandir("data/sfx/interface/", "*.wav")
+    local soundfiles = Me.scandir("data/sfx/interface/", "*.wav")
 
-    debugLog("getInterfaceSounds() -> soundfiles:")
+    Me.debugLog("getInterfaceSounds() -> soundfiles:")
     printTable(soundfiles)
 
     local sounds = {}
@@ -467,7 +509,7 @@ function getInterfaceSounds()
         sounds[i] = sf:match("(.+)%..+")
     end
 
-    debugLog("getInterfaceSounds() -> sounds:")
+    Me.debugLog("getInterfaceSounds() -> sounds:")
     printTable(sounds)
 
     return sounds

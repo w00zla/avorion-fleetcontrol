@@ -15,6 +15,13 @@ require "stringutility"
 
 require "fleetcontrol.common"
 
+-- namespace FleetControlUi
+FleetControlUi = {}
+
+local Me = FleetControlUi
+local Co = FleetControlCommon
+
+
 -- UI widget collections
 local mywindow
 local tabs = {
@@ -74,19 +81,6 @@ local shipseldialog = {
     lstShips = nil,
     btnOk = nil
 }
-local soundseldialog = {
-    visible = false,
-    lastselidx = nil,
-    window = nil,
-    param = nil,
-    callback = nil,
-    selectedsound = nil,
-    sounds = nil,
-    lblInfo = nil,
-    lstSounds = nil,
-    btnOk = nil
-}
-
 
 local c_ord = {
     btnPrevPage = nil,
@@ -194,17 +188,12 @@ local ordersbusy = false
 local hudsubscribed = false
 local eventsactive = false
 
-function initialize()
+function FleetControlUi.initialize()
 
     if onServer() then 
         -- SERVER
-        local sconfigdefaults = getServerConfigDefaults()
-        sconfig = getConfig("server", sconfigdefaults)
-        enableDebugOutput(sconfig.debugoutput) 
-        -- load all relevant options
-        for k, v in pairs(sconfigdefaults) do
-            debugLog("server config -> k: %s v: %s", k, sconfig[k])
-        end
+        sconfig = Co.getConfig("server", Co.getServerConfigDefaults())
+        Co.enableDebugOutput(sconfig.debugoutput)         
         deferredCallback(1, "syncServerConfig", sconfig)
         return 
     end
@@ -213,15 +202,15 @@ function initialize()
 
     -- initial debug options
     if not sconfig then
-        sconfig = getServerConfigDefaults()
-        enableDebugOutput(sconfig.debugoutput)
+        sconfig = Co.getServerConfigDefaults()
+        Co.enableDebugOutput(sconfig.debugoutput)
     end
 
-    ordersInfo = getOrdersInfo()
-    aiStates = getAiStates()
+    ordersInfo = Co.getOrdersInfo()
+    aiStates = Co.getAiStates()
 
     -- load player config values
-    pconfig = getConfig("player", getPlayerConfigDefaults())
+    pconfig = Co.getConfig("player", Co.getPlayerConfigDefaults())
     groupconfig = pconfig.groups
     hudconfig = pconfig.hud
     uiconfig = pconfig.ui
@@ -229,13 +218,13 @@ function initialize()
     knownships = pconfig.knownships
 
     if hudconfig.showhud then
-        subscribeHudCallbacks()
+        Me.subscribeHudCallbacks()
         doupdatestates = true
     end
 end
 
 
-function syncServerConfig(config)
+function FleetControlUi.syncServerConfig(config)
 
     if onServer() then
         invokeClientFunction(Player(callingPlayer), "syncServerConfig", config)
@@ -243,28 +232,48 @@ function syncServerConfig(config)
     end 
 
     -- re-creation of config object is required because metatable gets lost via serialization
-    sconfig = copyConfig(config)
-    enableDebugOutput(sconfig.debugoutput)
+    sconfig = Co.copyConfig(config)
+    Co.enableDebugOutput(sconfig.debugoutput)
 
     if sconfig.debugoutput then 
-        debugLog("synced mod server configuration:")
+        Co.debugLog("synced mod server configuration to client:")
         printTable(sconfig) 
     end
 
 end
 
 
-function getIcon(seed, rarity)
+function FleetControlUi.savePlayerConfig(config)
+
+    -- force this function to run server-side only
+    if onClient() then
+        pconfig.groups = groupconfig 
+        pconfig.hud = hudconfig 
+        pconfig.ui = uiconfig 
+        pconfig.shipgroups = shipgroups 
+        pconfig.knownships = knownships 
+
+        invokeServerFunction("savePlayerConfig", pconfig)
+        return
+    end
+
+    pconfig = config
+    Co.saveConfig(pconfig)
+
+end
+
+
+function FleetControlUi.getIcon(seed, rarity)
     return "data/textures/icons/fleetcontrol/commander.png"
 end
 
 
-function interactionPossible(player)
+function FleetControlUi.interactionPossible(player)
     return true, ""
 end
 
 
-function subscribeHudCallbacks()
+function FleetControlUi.subscribeHudCallbacks()
 
     -- debugLog("subscribeHudCallbacks()")
 
@@ -275,7 +284,7 @@ function subscribeHudCallbacks()
 
 end
 
-function unsubscribeHudCallbacks()
+function FleetControlUi.unsubscribeHudCallbacks()
 
     -- debugLog("unsubscribeHudCallbacks()")
 
@@ -285,10 +294,17 @@ function unsubscribeHudCallbacks()
 end
 
 
-function onShowWindow()
+function FleetControlUi.forceImmediateUpdate()
+
+    laststateupdate = sconfig.updatedelay + 1
+
+end
+
+
+function FleetControlUi.onShowWindow()
 
     -- pre-select orders tab everytime window is opened
-    laststateupdate = 0
+    Me.forceImmediateUpdate()
 
     if uiconfig.preselectorderstab then
         tabs.window:selectTab(tabs.orders)
@@ -302,7 +318,7 @@ function onShowWindow()
 end
 
 
-function onCloseWindow()
+function FleetControlUi.onCloseWindow()
 
     uivisible = false
     doupdatestates = hudconfig.showhud
@@ -310,6 +326,7 @@ function onCloseWindow()
     -- handle dialog windows and related vars
     if textdialog.window then textdialog.window:hide() end
     if colordialog.window then colordialog.window:hide() end
+    if c_conf.uigeneral.inputOrderSoundFile.visible then c_conf.uigeneral.inputOrderSoundFile:hide() end
 
     if hudposdialog.window then hudposdialog.window:hide() end
     hudanchoroverride = nil
@@ -322,18 +339,31 @@ function onCloseWindow()
 end
 
 
-function playOrderSound()
+function FleetControlUi.playOrderSound()
 
     if uiconfig.enableordersounds and uiconfig.ordersoundfile and uiconfig.ordersoundfile ~= "" then
-        local sfPath = "interface/" .. uiconfig.ordersoundfile
-        debugLog("order sounds enabled -> playing sound '%s'", sfPath)
+        
+        local soundfile
+        if string.find(uiconfig.ordersoundfile, ",") then
+            local files = {}
+            for file in string.gmatch(uiconfig.ordersoundfile, "([^,]+)") do
+                table.insert(files, file)
+            end
+            soundfile = files[math.random(#files)]
+        else
+            soundfile = uiconfig.ordersoundfile
+        end
+
+        local sfPath = "interface/" .. soundfile
+        Co.debugLog("order sounds enabled -> playing sound '%s'", sfPath)
+        -- TODO: enable random playing of multiple defined sounds
         playSound(sfPath, SoundType.UI, 1)
     end
 
 end
 
 
-function initUI()
+function FleetControlUi.initUI()
 
     local size = vec2(900, 700)
     local res = getResolution()
@@ -352,32 +382,31 @@ function initUI()
 
     -- build tabs
     tabs.orders = tabs.window:createTab("Orders", "data/textures/icons/fleetcontrol/commander.png", "Fleet Orders")
-    buildOrdersUI(tabs.orders)
+    Me.buildOrdersUI(tabs.orders)
 
     tabs.groups = tabs.window:createTab("Groups", "data/textures/icons/fleetcontrol/shipgroups.png", "Fleet Groups")
-    buildGroupsUI(tabs.groups)
+    Me.buildGroupsUI(tabs.groups)
 
     tabs.config = tabs.window:createTab("Config", "data/textures/icons/spanner.png", "Configuration")
-    buildConfigUI(tabs.config)
+    Me.buildConfigUI(tabs.config)
 
     -- build dialogs
-    buildTextDialog(menu, res)
-    buildColorDialog(menu, res)
-    buildHudPositioningDialog(menu, res)
-    buildShipSelectionDialog(menu, res)
-    buildSoundSelectionDialog(menu, res)
+    Me.buildTextDialog(menu, res)
+    Me.buildColorDialog(menu, res)
+    Me.buildHudPositioningDialog(menu, res)
+    Me.buildShipSelectionDialog(menu, res)
 
     -- init with first tab
     tabs.window:selectTab(tabs.orders)
 
     eventsactive = true
 
-    scriptLog(nil, "client UI initialized successfully")
+    Co.scriptLog(nil, "client UI initialized successfully")
     
 end
 
 
-function buildOrdersUI(parent)
+function FleetControlUi.buildOrdersUI(parent)
 
     -- create mappings
     for _, oi in pairs(ordersInfo) do
@@ -518,7 +547,7 @@ function buildOrdersUI(parent)
 end
 
 
-function buildGroupsUI(parent)
+function FleetControlUi.buildGroupsUI(parent)
 
     local size = parent.size
 
@@ -616,7 +645,7 @@ function buildGroupsUI(parent)
 end
 
 
-function buildConfigUI(parent)
+function FleetControlUi.buildConfigUI(parent)
 
     -- IDEAS for configs
     --------------------
@@ -638,7 +667,7 @@ function buildConfigUI(parent)
     split0.bottomSize = 18
 
     -- mod info label
-    local modinfolbl = parent:createLabel(vec2(split0.bottom.upper.x - 210, split0.bottom.lower.y + 6), getModInfoLine(), 12)
+    local modinfolbl = parent:createLabel(vec2(split0.bottom.upper.x - 210, split0.bottom.lower.y + 6), Co.getModInfoLine(), 12)
     modinfolbl.color = ColorRGB(0.2, 0.2, 0.2)
 
     local split1 = UIVerticalSplitter(split0.top, 30, 0, 0.5)
@@ -773,12 +802,16 @@ function buildConfigUI(parent)
     c_conf.uigeneral.chkCloseWindowOnLookAt = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y, r.lower.x + 350, r.lower.y + 20), "Close window on 'Look At' action", "onUiGeneralOptionChecked")
       
     local r = splituig2:partition(4)
-    c_conf.uigeneral.chkEnableOrderSounds = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y + 7, r.lower.x + 205, r.lower.y + 27), "Enable order sounds", "onUiGeneralOptionChecked")
-    local sflbl = c_conf.cntCatUIGeneral:createLabel(vec2(r.lower.x + 230, r.lower.y + 12), "Sound:", 13)
+    c_conf.uigeneral.chkEnableOrderSounds = c_conf.cntCatUIGeneral:createCheckBox(Rect(r.lower.x, r.lower.y + 7, r.lower.x + 205, r.lower.y + 27), "Enable order sounds", "onUiGeneralOptionChecked")   
+    local sflbl = c_conf.cntCatUIGeneral:createLabel(vec2(r.lower.x, r.lower.y + 38), "Sounds:", 13)
     sflbl.color = ColorRGB(0.3, 0.3, 0.3)
-    c_conf.uigeneral.lblOrderSoundFile = c_conf.cntCatUIGeneral:createLabel(vec2(r.lower.x + 290, r.lower.y + 12), "", 13)
-    c_conf.uigeneral.btnOrderSoundFile = c_conf.cntCatUIGeneral:createButton(Rect(r.lower.x + 470, r.lower.y + 7, r.upper.x, r.lower.y + 37), "Change Sound", "onChangeOrderSoundFilePressed")
-     
+    c_conf.uigeneral.lblOrderSoundFile = c_conf.cntCatUIGeneral:createLabel(vec2(r.lower.x + 75, r.lower.y + 38), "", 12)
+    c_conf.uigeneral.lblOrderSoundFile.rect.upper.x = r.upper.x - 150
+    c_conf.uigeneral.btnOrderSoundFile = c_conf.cntCatUIGeneral:createButton(Rect(r.upper.x - 140, r.lower.y + 38, r.upper.x, r.lower.y + 66), "Change Sounds", "onChangeOrderSoundFilePressed")
+    c_conf.uigeneral.inputOrderSoundFile = c_conf.cntCatUIGeneral:createInputWindow()
+    c_conf.uigeneral.inputOrderSoundFile.onOKFunction = "onOrderSoundFileNameEntered"
+    c_conf.uigeneral.inputOrderSoundFile.caption = "Sound Files"
+
     -- UI Colors options
 
     c_conf.lstCategories:addEntry("UI Colors")
@@ -814,49 +847,48 @@ function buildConfigUI(parent)
 
 end
 
-
-function onTabSelected()
+function FleetControlUi.onTabSelected()
 
     selectedtabidx = tabs.window:getActiveTab().index
 
     if tabs.orders and tabs.orders.index == selectedtabidx then
 
-        laststateupdate = 0
+        Me.forceImmediateUpdate()
         if uiconfig.preselectordersfirstpage then
             currentPage = 1
             c_ord.btnPrevPage.active = false
             c_ord.btnNextPage.active = true
         end  
         -- update groupnames and shown groups in related widgets
-        refreshGroupNames()
-        refreshPageInfo()
+        Me.refreshGroupNames()
+        Me.refreshPageInfo()
         
     elseif tabs.groups and tabs.groups.index == selectedtabidx then
 
         -- update groups tab widgets
-        refreshGroupsUIShips()
-        refreshGroupsInfo()
+        Me.refreshGroupsUIShips()
+        Me.refreshGroupsInfo()
 
     elseif tabs.config and tabs.config.index == selectedtabidx then
 
         -- update config tab widgets
-        refreshConfigUIGroups()
-        refreshConfigUIHud()
-        refreshConfigUIGeneral()
-        refreshConfigUIColors()
+        Me.refreshConfigUIGroups()
+        Me.refreshConfigUIHud()
+        Me.refreshConfigUIGeneral()
+        Me.refreshConfigUIColors()
 
     end
 
 end
 
 
-function onPrevPagePressed()
+function FleetControlUi.onPrevPagePressed()
     
     currentPage = currentPage - 1
-    laststateupdate = 0
+    Me.forceImmediateUpdate()
 
-    refreshGroupNames()
-    refreshPageInfo()
+    Me.refreshGroupNames()
+    Me.refreshPageInfo()
 
     if currentPage == 1 then
         c_ord.btnPrevPage.active = false
@@ -866,13 +898,13 @@ function onPrevPagePressed()
 end
 
 
-function onNextPagePressed()
+function FleetControlUi.onNextPagePressed()
 
     currentPage = currentPage + 1
-    laststateupdate = 0
+    Me.forceImmediateUpdate()
 
-    refreshGroupNames()
-    refreshPageInfo()
+    Me.refreshGroupNames()
+    Me.refreshPageInfo()
 
     if currentPage == 2 then
         c_ord.btnNextPage.active = false
@@ -882,12 +914,12 @@ function onNextPagePressed()
 end
 
 
-function onLookAtPressed(sender)
+function FleetControlUi.onLookAtPressed(sender)
 
-    for i, g in orderGroupsIter() do
+    for i, g in Me.orderGroupsIter() do
         for s, btn in pairs(c_ord.ships.btnLook[i]) do
             if btn.index == sender.index then
-                if shipinfos[g][s].index then
+                if not shipinfos[g][s].elsewhere then
                     local entity = Entity(shipinfos[g][s].index)
                     if entity then
                         Player().selectedObject = entity
@@ -909,10 +941,10 @@ function onLookAtPressed(sender)
 end
 
 
-function onGroupOrderSelected(sender)
+function FleetControlUi.onGroupOrderSelected(sender)
 
     local cbox, grp
-    for i, g in orderGroupsIter() do
+    for i, g in Me.orderGroupsIter() do
         if sender.index == c_ord.cmdGroupOrder[i].index then
             cbox = c_ord.cmdGroupOrder[i]
             grp = g
@@ -925,38 +957,38 @@ function onGroupOrderSelected(sender)
     if ordersbusy then return end
     ordersbusy = true
 
-    local oi = table.childByKeyVal(ordersInfo, "text", cbox.selectedEntry)
+    local oi = Co.table_childByKeyVal(ordersInfo, "text", cbox.selectedEntry)
     if not oi then return end
 
     -- issue orders to all group ships excluding player driven ships
     local indices = {}
-    for i, ship in pairs(shipinfos[grp]) do
+    for i, ship in pairs(shipinfos[grp]) do     
         if not ship.isplayer and ship.hascaptain then
             indices[i] = ship.index
         end
 	end
-    playOrderSound()
-    invokeOrdersScript(indices, oi)
+    Me.playOrderSound()
+    Me.invokeOrdersScript(indices, oi)
 
 end
 
 
-function onShipOrderSelected(sender)
+function FleetControlUi.onShipOrderSelected(sender)
 
     if ordersbusy then return end
     ordersbusy = true
 
-    for i, g in orderGroupsIter() do
+    for i, g in Me.orderGroupsIter() do
         for s, cmd in pairs(c_ord.ships.cmdOrder[i]) do
             if cmd.index == sender.index then
                 if cmd.selectedIndex < 1 then return end
-                local oi = table.childByKeyVal(ordersInfo, "text", cmd.selectedEntry)
+                local oi = Co.table_childByKeyVal(ordersInfo, "text", cmd.selectedEntry)
                 if oi then 
                     local indices = {shipinfos[g][s].index}	
                     if not oi.invokecurrent then
-                        playOrderSound()
+                        Me.playOrderSound()
                     end
-                    invokeOrdersScript(indices, oi)
+                    Me.invokeOrdersScript(indices, oi)
                 end                   
                 break
             end
@@ -966,15 +998,16 @@ function onShipOrderSelected(sender)
 end
 
 
-function onAssignShipGroupPressed(sender)
+function FleetControlUi.onAssignShipGroupPressed(sender)
 
     local shipname = c_grp.lstPool:getEntry(c_grp.lstPool.selected)
+    local shipidx = Co.table_childByKeyVal(knownships, "name", shipname).index
 
     for i, btn in pairs(c_grp.groups.btnAssign) do
 		if btn.index == sender.index then
             -- update config data
-            table.insert(shipgroups[i], shipname)
-            pconfig.shipgroups = shipgroups
+            table.insert(shipgroups[i], shipidx)
+            Me.savePlayerConfig()
             -- update list widgets
             c_grp.groups.lstShips[i]:addEntry(shipname)
             c_grp.lstPool:removeEntry(c_grp.lstPool.selected)
@@ -982,19 +1015,19 @@ function onAssignShipGroupPressed(sender)
 		end
 	end
 
-    refreshGroupsUIButtons(true)
-    refreshGroupsInfo()
+    Me.refreshGroupsUIButtons(true)
+    Me.refreshGroupsInfo()
 
 end
 
 
-function onUnassignShipGroupPressed(sender)
+function FleetControlUi.onUnassignShipGroupPressed(sender)
 
     for i, btn in pairs(c_grp.groups.btnUnassign) do
 		if btn.index == sender.index then
             -- update config data
             table.remove(shipgroups[i], c_grp.groups.lstShips[i].selected + 1)
-            pconfig.shipgroups = shipgroups
+            Me.savePlayerConfig()
             -- update list widgets
             local shipname = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected)       
             c_grp.lstPool:addEntry(shipname)
@@ -1005,13 +1038,13 @@ function onUnassignShipGroupPressed(sender)
 
     -- TODO: sort ship list alphanum style
 
-    refreshGroupsUIButtons(true)
-    refreshGroupsInfo()
+    Me.refreshGroupsUIButtons(true)
+    Me.refreshGroupsInfo()
 
 end
 
 
-function onGroupShipUpPressed(sender)
+function FleetControlUi.onGroupShipUpPressed(sender)
 
     for i, btn in pairs(c_grp.groups.btnMoveUp) do
 		if btn.index == sender.index then
@@ -1021,7 +1054,7 @@ function onGroupShipUpPressed(sender)
                 local s1, s2 = shipgroups[i][selidx], shipgroups[i][selidx-1]
                 shipgroups[i][selidx-1] = s1
                 shipgroups[i][selidx] = s2
-                pconfig.shipgroups = shipgroups
+                Me.savePlayerConfig()
                 -- update list widgets
                 local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected-1)
                 c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected-1, s1, bold, italic, color)
@@ -1034,12 +1067,12 @@ function onGroupShipUpPressed(sender)
 		end
 	end
 
-    refreshGroupsUIButtons(true)
+    Me.refreshGroupsUIButtons(true)
 
 end
 
 
-function onGroupShipDownPressed(sender)
+function FleetControlUi.onGroupShipDownPressed(sender)
 
     for i, btn in pairs(c_grp.groups.btnMoveDown) do
 		if btn.index == sender.index then
@@ -1049,7 +1082,7 @@ function onGroupShipDownPressed(sender)
                 local s1, s2 = shipgroups[i][selidx], shipgroups[i][selidx+1]
                 shipgroups[i][selidx+1] = s1
                 shipgroups[i][selidx] = s2
-                pconfig.shipgroups = shipgroups
+                Me.savePlayerConfig()
                 -- update list widgets
                 local _, bold, italic, color = c_grp.groups.lstShips[i]:getEntry(c_grp.groups.lstShips[i].selected+1)
                 c_grp.groups.lstShips[i]:setEntry(c_grp.groups.lstShips[i].selected+1, s1, bold, italic, color)
@@ -1062,124 +1095,126 @@ function onGroupShipDownPressed(sender)
 		end
 	end
 
-    refreshGroupsUIButtons(true)
+    Me.refreshGroupsUIButtons(true)
 
 end
 
 
-function onRenameGroupPressed(sender)
+function FleetControlUi.onRenameGroupPressed(sender)
 
     for i, btn in pairs(c_conf.groups.btnRename) do
 		if btn.index == sender.index then
-            showTextDialog("Rename Group", i, onRenameGroupCallback, groupconfig[i].name, groupnamelimit)
+            Me.showTextDialog("Rename Group", i, Me.onRenameGroupCallback, groupconfig[i].name, groupnamelimit)
 		end
 	end
 
 end
 
-function onRenameGroupCallback(result, text, param)
+function FleetControlUi.onRenameGroupCallback(result, text, param)
 
     if result and text and text ~= "" then
         -- update UI and config with new group name
         groupconfig[param].name = text
-        pconfig.groups = groupconfig
-        refreshGroupNames()
+        Me.savePlayerConfig()
+        Me.refreshGroupNames()
     end
 
 end
 
 
-function onChangeOrderSoundFilePressed()
- 
-    showSoundSelectionDialog("Select order sound:", "ordersound", onChangeOrderSoundFileCallback)
+function FleetControlUi.onChangeOrderSoundFilePressed() 
+    
+    c_conf.uigeneral.inputOrderSoundFile:show("Names of sound files to use (comma to seperate, without extension):")
+    c_conf.uigeneral.inputOrderSoundFile.textBox.text = uiconfig.ordersoundfile or ""
 
 end
 
-function onChangeOrderSoundFileCallback(result, sound, param)
 
-    if result and sound and sound ~= "" then
-        -- update UI and config with new group name
-        uiconfig.ordersoundfile = sound
-        pconfig.ui = uiconfig
-        refreshConfigUIGeneral()
+function FleetControlUi.onOrderSoundFileNameEntered(windows, text)
+    if text and text ~= "" then
+        uiconfig.ordersoundfile = text
+        Me.savePlayerConfig()
+        Me.refreshConfigUIGeneral()
     end
 
 end
 
 
-function onGroupHudChecked(sender)
+function FleetControlUi.onGroupHudChecked(sender)
 
     if not eventsactive then return end
 
     for i, chk in pairs(c_conf.groups.chkShowHud) do
 		if chk.index == sender.index then
             groupconfig[i].showhud = chk.checked
-            pconfig.groups = groupconfig
+            Me.savePlayerConfig()
 		end
 	end
 
 end
 
 
-function onPickHudColorPressed(sender)
+function FleetControlUi.onPickHudColorPressed(sender)
 
     for i, btn in pairs(c_conf.groups.btnHudColorPick) do
 		if btn.index == sender.index then
             local color = ColorARGB(groupconfig[i].hudcolor.a, groupconfig[i].hudcolor.r, groupconfig[i].hudcolor.g, groupconfig[i].hudcolor.b)
-            showColorDialog("Choose HUD Color", i, onPickHudColorCallback, color, true)
+            Me.showColorDialog("Choose HUD Color", i, Me.onPickHudColorCallback, color, true)
             break
 		end
 	end
 
 end
 
-function onPickHudColorCallback(result, color, param)
+function FleetControlUi.onPickHudColorCallback(result, color, param)
+
+    Co.debugLog("result: %s color: %s", result, color)
 
     if result and color then
         -- update UI and pconfig with new group name
         groupconfig[param].hudcolor = {a=color.a,r=color.r,g=color.g,b=color.b}
-        pconfig.groups = groupconfig
-        refreshConfigUIGroups()
+        Me.savePlayerConfig()
+        Me.refreshConfigUIGroups()
     end
 
 end
 
 
-function onShowHudChecked()
+function FleetControlUi.onShowHudChecked()
 
     if not eventsactive then return end
 
     -- update config and save
-    hudconfig.showhud = c_conf.hud.chkShowHud.checked
     c_conf.hud.btnPosHud.active = c_conf.hud.chkShowHud.checked
+    hudconfig.showhud = c_conf.hud.chkHud.checked    
 
-    pconfig.hud = hudconfig
+    Me.savePlayerConfig()
 
     if hudconfig.showhud then
-        subscribeHudCallbacks()
+        Me.subscribeHudCallbacks()
     else
-        unsubscribeHudCallbacks()
+        Me.unsubscribeHudCallbacks()
     end
 
 end
 
 
-function onSetHudPositionPressed(sender)
+function FleetControlUi.onSetHudPositionPressed(sender)
 
-    showHudPositioningDialog()
+    Me.showHudPositioningDialog()
 
 end
 
 
-function onHudStyleSelected()
+function FleetControlUi.onHudStyleSelected()
 
     hudconfig.hudstyle = c_conf.hud.cmbHudStyle.selectedIndex
-    pconfig.hud = hudconfig
+    Me.savePlayerConfig()
 
 end
 
 
-function onHudOptionChecked(sender)
+function FleetControlUi.onHudOptionChecked(sender)
 
     if not eventsactive then return end
 
@@ -1190,12 +1225,12 @@ function onHudOptionChecked(sender)
     hudconfig.hideuncaptained = c_conf.hud.chkHideUncaptained.checked
     hudconfig.useuistatecolors = c_conf.hud.chkUseUiStateClrs.checked
 
-    pconfig.hud = hudconfig
+    Me.savePlayerConfig()
 
 end
 
 
-function onUiGeneralOptionChecked(sender)
+function FleetControlUi.onUiGeneralOptionChecked(sender)
 
     if not eventsactive then return end
 
@@ -1204,53 +1239,54 @@ function onUiGeneralOptionChecked(sender)
     uiconfig.closewindowonlookat = c_conf.uigeneral.chkCloseWindowOnLookAt.checked
     uiconfig.enableordersounds = c_conf.uigeneral.chkEnableOrderSounds.checked
 
-    pconfig.ui = uiconfig
+    Me.savePlayerConfig()
 
 end
 
 
-function onPickStateColorPressed(sender)
+function FleetControlUi.onPickStateColorPressed(sender)
 
     for i, btn in pairs(c_conf.uicolors.btnStateColorPick) do
 		if btn.index == sender.index then
             local clrval = uiconfig.statecolors[aiStates[i]]
-            showColorDialog("Choose State Color", i, onPickStateColorCallback, ColorRGB(clrval.r, clrval.g, clrval.b), false)
+            Me.showColorDialog("Choose State Color", i, Me.onPickStateColorCallback, ColorRGB(clrval.r, clrval.g, clrval.b), false)
             break
 		end
 	end
 
 end
 
-function onPickStateColorCallback(result, color, param)
+function FleetControlUi.onPickStateColorCallback(result, color, param)
 
     if result and color then
         -- update config with new state color
         uiconfig.statecolors[aiStates[param]] = {r=color.r,g=color.g,b=color.b}
-        pconfig.ui = uiconfig
-        refreshConfigUIColors()
+
+        Me.savePlayerConfig()
+        Me.refreshConfigUIColors()
     end
 
 end
 
 
-function onEscortShipButtonPressed(shipidx)
+function FleetControlUi.onEscortShipButtonPressed(shipidx)
 
     if onServer() then
         invokeClientFunction(Player(), "onEscortShipButtonPressed", shipidx)
         return
     end
 
-    showShipSelectionDialog("Select ship to escort:", shipidx, onEscortShipSelectionCallback)
+    Me.showShipSelectionDialog("Select ship to escort:", shipidx, Me.onEscortShipSelectionCallback)
 
 end
 
-function onEscortShipSelectionCallback(result, selectedship, param)
+function FleetControlUi.onEscortShipSelectionCallback(result, selectedship, param)
 
     if result and selectedship then
         local indices = {param}	
-        local oi = table.childByKeyVal(ordersInfo, "order", "Escort")
-        playOrderSound()
-        invokeOrdersScript(indices, oi, selectedship.index)                 
+        local oi = Co.table_childByKeyVal(ordersInfo, "order", "Escort")
+        Me.playOrderSound()
+        Me.invokeOrdersScript(indices, oi, selectedship.index)                 
     end
 
 end
@@ -1258,7 +1294,7 @@ end
 
 ---- DIALOG WINDOWS ----
 
-function buildTextDialog(menu, res)
+function FleetControlUi.buildTextDialog(menu, res)
 
     local size = vec2(350, 120)
 
@@ -1279,7 +1315,7 @@ function buildTextDialog(menu, res)
 
 end
 
-function onTextDialogOKPressed()
+function FleetControlUi.onTextDialogOKPressed()
 
     textdialog.window:hide()
 
@@ -1289,7 +1325,7 @@ function onTextDialogOKPressed()
 
 end
 
-function onTextDialogCancelPressed()
+function FleetControlUi.onTextDialogCancelPressed()
 
     textdialog.window:hide()
 
@@ -1299,7 +1335,7 @@ function onTextDialogCancelPressed()
 
 end
 
-function showTextDialog(caption, param, callback, text, maxlen)
+function FleetControlUi.showTextDialog(caption, param, callback, text, maxlen)
 
     textdialog.window.caption = caption
     textdialog.textbox.text = text or ""
@@ -1313,7 +1349,7 @@ function showTextDialog(caption, param, callback, text, maxlen)
 end
 
 
-function buildColorDialog(menu, res)
+function FleetControlUi.buildColorDialog(menu, res)
 
     local size = vec2(500, 375)
 
@@ -1350,7 +1386,7 @@ function buildColorDialog(menu, res)
 
 end
 
-function refreshColorDialogPreview()
+function FleetControlUi.refreshColorDialogPreview()
 
     local valA = colordialog.sliderA.sliderPosition
     local valR = colordialog.sliderR.sliderPosition
@@ -1363,7 +1399,7 @@ function refreshColorDialogPreview()
 
 end
 
-function onColorDialogOKPressed()
+function FleetControlUi.onColorDialogOKPressed()
 
     colordialog.window:hide()
 
@@ -1373,7 +1409,7 @@ function onColorDialogOKPressed()
 
 end
 
-function onColorDialogCancelPressed()
+function FleetControlUi.onColorDialogCancelPressed()
 
     colordialog.window:hide()
 
@@ -1383,7 +1419,7 @@ function onColorDialogCancelPressed()
 
 end
 
-function showColorDialog(caption, param, callback, color, showalpha)
+function FleetControlUi.showColorDialog(caption, param, callback, color, showalpha)
 
     colordialog.window.caption = caption
     colordialog.colorpreview.color = color
@@ -1407,7 +1443,7 @@ function showColorDialog(caption, param, callback, color, showalpha)
 end
 
 
-function buildHudPositioningDialog(menu, res)
+function FleetControlUi.buildHudPositioningDialog(menu, res)
 
     local size = vec2(800, 260)
 
@@ -1513,13 +1549,13 @@ function buildHudPositioningDialog(menu, res)
 
 end
 
-function onHudStepSizeChanged()
+function FleetControlUi.onHudStepSizeChanged()
 
     hudposdialog.stepsize = hudposdialog.sliderStepSize.value
 
 end
 
-function onAlignHudPressed(sender)
+function FleetControlUi.onAlignHudPressed(sender)
 
     if sender.index == hudposdialog.btnAlignTL.index then
         -- top-left
@@ -1560,11 +1596,11 @@ function onAlignHudPressed(sender)
     end
 
     hudanchoroverride = hudposdialog.hudanchor
-    hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
+    hudposdialog.lblHudPos.caption = Co.formatPosition(hudposdialog.hudanchor)
 
 end
 
-function onPositionHudPressed(sender)
+function FleetControlUi.onPositionHudPressed(sender)
 
     if sender.index == hudposdialog.btnPosUp.index then
         -- up
@@ -1601,41 +1637,41 @@ function onPositionHudPressed(sender)
     end
 
     hudanchoroverride = hudposdialog.hudanchor
-    hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
+    hudposdialog.lblHudPos.caption = Co.formatPosition(hudposdialog.hudanchor)
 
 end
 
-function onHudPositioningDialogOKPressed()
+function FleetControlUi.onHudPositioningDialogOKPressed()
 
     hudposdialog.window:hide()
     hudconfig.hudanchor = { x=hudposdialog.hudanchor.x, y=hudposdialog.hudanchor.y }
 
-    -- save new config values
-    pconfig.hud = hudconfig
+    Me.savePlayerConfig()
+
     hudanchoroverride = nil
 
 end
 
-function onHudPositioningDialogCancelPressed()
+function FleetControlUi.onHudPositioningDialogCancelPressed()
 
     hudposdialog.window:hide()
     hudanchoroverride = nil
 
 end
 
-function showHudPositioningDialog()
+function FleetControlUi.showHudPositioningDialog()
 
     hudposdialog.resolution = getResolution()
     hudposdialog.hudanchor = { x=hudconfig.hudanchor.x, y=hudconfig.hudanchor.y }
     hudanchoroverride = hudposdialog.hudanchor
 
-    hudposdialog.lblHudPos.caption = formatPosition(hudposdialog.hudanchor)
+    hudposdialog.lblHudPos.caption = Co.formatPosition(hudposdialog.hudanchor)
     hudposdialog.window:show()
 
 end
 
 
-function buildShipSelectionDialog(menu, res)
+function FleetControlUi.buildShipSelectionDialog(menu, res)
 
     local size = vec2(350, 400)
 
@@ -1664,7 +1700,7 @@ function buildShipSelectionDialog(menu, res)
 
 end
 
-function onShipSelectionDialogOKPressed()
+function FleetControlUi.onShipSelectionDialogOKPressed()
 
     shipseldialog.window:hide()
 
@@ -1674,20 +1710,20 @@ function onShipSelectionDialogOKPressed()
 
 end
 
-function onShipSelectionDialogCancelPressed()
+function FleetControlUi.onShipSelectionDialogCancelPressed()
 
     shipseldialog.window:hide()
     shipseldialog.visible = false
 
 end
 
-function showShipSelectionDialog(infotext, param, callback)
+function FleetControlUi.showShipSelectionDialog(infotext, param, callback)
 
     shipseldialog.lblInfo.caption = infotext
     shipseldialog.lstShips:clear()
     shipseldialog.btnOk.active = false
 
-    local sectorships = sortShipsArray(getPlayerCrafts())
+    local sectorships = Co.sortShipsArray(Co.getPlayerCrafts())
     shipseldialog.ships = {}
     for i, ship in pairs(sectorships) do
         if ship.index ~= param then
@@ -1705,7 +1741,7 @@ function showShipSelectionDialog(infotext, param, callback)
 
 end
 
-function refreshShipSelectionDialog()
+function FleetControlUi.refreshShipSelectionDialog()
 
     if shipseldialog.lstShips.selected ~= shipseldialog.lastselidx then
         shipseldialog.lastselidx = shipseldialog.lstShips.selected
@@ -1714,87 +1750,12 @@ function refreshShipSelectionDialog()
     end
 end
 
-
-function buildSoundSelectionDialog(menu, res)
-
-    local size = vec2(350, 400)
-
-    soundseldialog.window = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
-    soundseldialog.window.caption = "Select Sound"
-    soundseldialog.window.visible = false
-    soundseldialog.window.showCloseButton = 1
-    soundseldialog.window.moveable = 1
-    soundseldialog.window.closeableWithEscape = 1
-
-    local split1 = UIHorizontalSplitter(Rect(vec2(0, 0), size), 30, 20, 0.5)
-    split1.bottomSize = 30
-
-    local split2 = UIHorizontalSplitter(split1.top, 10, 0, 0.5)
-    split2.topSize = 25
-
-    soundseldialog.lblInfo = soundseldialog.window:createLabel(vec2(split2.top.lower.x + 5, split2.top.lower.y), "Select sound:", 16)
-    soundseldialog.lblInfo.color = ColorRGB(0.3, 0.3, 0.3)
-    soundseldialog.lstSounds = soundseldialog.window:createListBox(split2.bottom)
-
-    local xu, yu = split1.bottom.upper.x, split1.bottom.upper.y
-    soundseldialog.btnOk = soundseldialog.window:createButton(Rect(xu - 170, yu - 30, xu - 90, yu), "Select", "onSoundSelectionDialogOKPressed")
-    soundseldialog.window:createButton(Rect(xu - 80, yu - 30, xu, yu), "Cancel", "onShipSelectionDialogCancelPressed")
-
-    soundseldialog.window:hide()
-
-end
-
-function onSoundSelectionDialogOKPressed()
-
-    soundseldialog.window:hide()
-
-    if soundseldialog.callback and type(soundseldialog.callback) == "function" then
-        soundseldialog.callback(true, soundseldialog.selectedsound, soundseldialog.param)
-    end
-
-end
-
-function onSoundSelectionDialogCancelPressed()
-
-    soundseldialog.window:hide()
-    soundseldialog.visible = false
-
-end
-
-function showSoundSelectionDialog(infotext, param, callback)
-
-    soundseldialog.lblInfo.caption = infotext
-    soundseldialog.lstSounds:clear()
-    soundseldialog.btnOk.active = false
-
-    soundseldialog.sounds = getInterfaceSounds()
-    for _, sound in pairs(soundseldialog.sounds) do
-        soundseldialog.lstSounds:addEntry(sound)
-    end
-
-    soundseldialog.param = param
-    soundseldialog.callback = callback
-
-    soundseldialog.window:show()
-    soundseldialog.visible = true
-
-end
-
-function refreshSoundSelectionDialog()
-
-    if soundseldialog.lstSounds.selected ~= soundseldialog.lastselidx then
-        soundseldialog.lastselidx = soundseldialog.lstSounds.selected
-        soundseldialog.selectedsound = soundseldialog.sounds[soundseldialog.lastselidx+1]
-        soundseldialog.btnOk.active = (soundseldialog.lastselidx >= 0)
-    end
-end
-
 ---- UI UPDATES ----
 
-function refreshGroupNames()
+function FleetControlUi.refreshGroupNames()
 
     -- Orders tab
-    for i, g in orderGroupsIter() do
+    for i, g in Me.orderGroupsIter() do
         c_ord.lblGroupName[i].caption = groupconfig[g].name
     end
 
@@ -1808,7 +1769,7 @@ function refreshGroupNames()
 end
 
 
-function refreshOrdersUI()
+function FleetControlUi.refreshOrdersUI()
 
     -- hide all ship list widgets at first
     for g = 1, ordergroupslimit do
@@ -1828,7 +1789,7 @@ function refreshOrdersUI()
     
     local currentcoords = vec2(Sector():getCoordinates())
 
-    for i, g in orderGroupsIter() do
+    for i, g in Me.orderGroupsIter() do
         local ordersequal = #shipinfos[g] > 0
         local lastorder = nil
 
@@ -1839,12 +1800,12 @@ function refreshOrdersUI()
             end
             lastorder = shipinfo.order
 
-            displayShipState(i, s, shipinfo, currentcoords)       
+            Me.displayShipState(i, s, shipinfo, currentcoords)       
         end
 
         -- pre-select group order
         if ordersequal then
-            local oi = table.childByKeyVal(ordersInfo, "order", lastorder)
+            local oi = Co.table_childByKeyVal(ordersInfo, "order", lastorder)
             if oi and not oi.nongrouporder then
                 for j, otxt in pairs(groupordermapping) do
                     if otxt == oi.text then
@@ -1861,7 +1822,7 @@ function refreshOrdersUI()
 end
 
 
-function displayShipState(g, s, ship, currloc)
+function FleetControlUi.displayShipState(g, s, ship, currloc)
 
     if g > ordergroupslimit or s > groupshiplimit then return end
 
@@ -1911,7 +1872,7 @@ function displayShipState(g, s, ship, currloc)
             c_ord.ships.cmdOrder[g][s]:setSelectedIndexNoCallback(1)
             c_ord.ships.cmdOrder[g][s]:show()
             if ship.order then
-                local oi = table.childByKeyVal(ordersInfo, "order", ship.order)
+                local oi = Co.table_childByKeyVal(ordersInfo, "order", ship.order)
                 if oi and not oi.nonshiporder then
                     for j, otxt in pairs(shipordermapping) do
                         if otxt == oi.text then
@@ -1930,7 +1891,7 @@ function displayShipState(g, s, ship, currloc)
 end
 
 
-function refreshPageInfo()
+function FleetControlUi.refreshPageInfo()
 
     local lb = ((currentPage * ordergroupslimit) - ordergroupslimit + 1)
     local ub = (currentPage * ordergroupslimit) 
@@ -1939,7 +1900,7 @@ function refreshPageInfo()
 end
 
 
-function refreshGroupsInfo()
+function FleetControlUi.refreshGroupsInfo()
 
     for g = 1, 4 do
         local cur, max = c_grp.groups.lstShips[g].rows, groupshiplimit
@@ -1954,12 +1915,13 @@ function refreshGroupsInfo()
 end
 
 
-function refreshGroupsUIShips()
+function FleetControlUi.refreshGroupsUIShips()
 
     -- fill group lists with assigned ships
     for i = 1, 4 do
         c_grp.groups.lstShips[i]:clear()
-        for _, shipname in pairs(shipgroups[i]) do
+        for _, shipidx in pairs(shipgroups[i]) do           
+            local shipname = Co.table_childByKeyVal(knownships, "index", shipidx).name
             c_grp.groups.lstShips[i]:addEntry(shipname)
         end
     end
@@ -1969,7 +1931,7 @@ function refreshGroupsUIShips()
     for _, ship in pairs(knownships) do 
         local assigned = false
         for i, shipgrp in pairs(shipgroups) do 
-            if table.contains(shipgrp, ship.name) then
+            if Co.table_contains(shipgrp, ship.index) then
                 assigned = true
                 break
             end      
@@ -1982,7 +1944,7 @@ function refreshGroupsUIShips()
 end
 
 
-function refreshGroupsUIButtons(force)
+function FleetControlUi.refreshGroupsUIButtons(force)
 
     -- en/disable ship assignment buttons according to list selections 
     if force or c_grp.lstPool.selected ~= shipPoolLastIndex then
@@ -2004,7 +1966,7 @@ function refreshGroupsUIButtons(force)
 end
 
 
-function refreshConfigUICategory()
+function FleetControlUi.refreshConfigUICategory()
 
     -- show selected options category widgets
     if c_conf.lstCategories.selected ~= configCatsLastIndex then  
@@ -2035,7 +1997,7 @@ function refreshConfigUICategory()
 end
 
 
-function refreshConfigUIGroups()
+function FleetControlUi.refreshConfigUIGroups()
 
     eventsactive = false
 
@@ -2051,7 +2013,7 @@ function refreshConfigUIGroups()
 end
 
 
-function refreshConfigUIHud()
+function FleetControlUi.refreshConfigUIHud()
 
     eventsactive = false
 
@@ -2082,7 +2044,7 @@ function refreshConfigUIHud()
 end
 
 
-function refreshConfigUIGeneral()
+function FleetControlUi.refreshConfigUIGeneral()
 
     eventsactive = false
 
@@ -2097,7 +2059,7 @@ function refreshConfigUIGeneral()
 end
 
 
-function refreshConfigUIColors()
+function FleetControlUi.refreshConfigUIColors()
 
     eventsactive = false
 
@@ -2115,42 +2077,38 @@ function refreshConfigUIColors()
 end
 
 
-function updateUI()
+function FleetControlUi.updateUI()
 
     -- refresh widgets in window tabs
     if selectedtabidx == tabs.groups.index then
-        refreshGroupsUIButtons()
+        Me.refreshGroupsUIButtons()
     elseif selectedtabidx == tabs.config.index then
-        refreshConfigUICategory()
+        Me.refreshConfigUICategory()
     end
 
     -- refresh widgets in dialog windows
     if shipseldialog.visible then
-        refreshShipSelectionDialog()
-    end
-    if soundseldialog.visible then
-        refreshSoundSelectionDialog()
+        Me.refreshShipSelectionDialog()
     end
 
 end
 
 
-function updateClient(timeStep)
+function FleetControlUi.updateClient(timeStep)
 
     if doupdatestates and sconfig then
         
+        -- TODO: Replace with getUpdateInterval()
         laststateupdate = laststateupdate + (timeStep * 1000)
 
         -- only do update if configured delay has passed
         if sconfig.updatedelay and laststateupdate >= sconfig.updatedelay then
 
-            -- get latest values for relevant player configs (since other scripts could have changed these)
-            pconfig = getConfig("player", getPlayerConfigDefaults())
             shipgroups = pconfig.shipgroups
             knownships = pconfig.knownships
 
             -- get all exisiting ships of player in current sector
-            local sectorships = getPlayerCrafts()
+            local sectorships = Co.getPlayerCrafts()
 
             local cx, cy = Sector():getCoordinates()
             local coords = {x=cx, y=cy}          
@@ -2158,31 +2116,37 @@ function updateClient(timeStep)
             local knownshipsupdate = false
             for _, s in pairs(sectorships) do 
 
-                -- TODO: add non-UI entity scripts here!!
-
-                local ship, idx = table.childByKeyVal(knownships, "name", s.name)
+                local ship, idx = Co.table_childByKeyVal(knownships, "index", s.index.string)
                 if not ship then
-                    debugLog("updateClient() -> new known ship '%s'", s.name)
+                    Co.debugLog("updateClient() -> new known ship '%s' (%s)", s.name, s.index)
                     -- add new ships to known ones
-                    table.insert(knownships, {name=s.name,location=coords})
+                    table.insert(knownships, {index=s.index.string,name=s.name,location=coords})
                     knownshipsupdate = true
                 else                   
                     -- update location info
                     if ship.location.x ~= coords.x or ship.location.y ~= coords.y then
-                        debugLog("updateClient() -> update location info of ship '%s'", ship.name)
+                        Co.debugLog("updateClient() -> update location info of ship '%s' (%s)", ship.name, ship.index)
                         knownships[idx].location = coords
                         knownshipsupdate = true
                     end
                 end
             end
             if knownshipsupdate then
-                debugLog("updateClient() -> updating player knownships")
-                sortShipsArray(knownships)
+                Co.debugLog("updateClient() -> updating player knownships")
+                Co.sortShipsArray(knownships)
                 pconfig.knownships = knownships
             end
 
             -- update ship states and refresh ships UI widgets
-            updateShipStates(shipgroups, sectorships)
+            -- create flat array of ship names to update
+            local updateindices = {}
+            for _, grp in pairs(shipgroups) do
+                for _, sidx in pairs(grp) do
+                    table.insert(updateindices, sidx)
+                end
+            end
+        
+            Me.updateShipStates(updateindices, sectorships)
 
             laststateupdate = 0
             ordersbusy = false
@@ -2192,7 +2156,7 @@ function updateClient(timeStep)
 end
 
 
-function onPreRenderHud()
+function FleetControlUi.onPreRenderHud()
 
     -- draw HUD elements if enabled
     if shipinfos and sconfig and sconfig.enablehud and hudconfig and hudconfig.showhud then
@@ -2229,9 +2193,9 @@ function onPreRenderHud()
                         if hudconfig.hudstyle == 0 then
                             name = ship.name
                         elseif hudconfig.hudstyle == 1 then                      
-                            name = shortenText(ship.name, 15) -- shorten text to max size for horizontal style
+                            name = Co.shortenText(ship.name, 15) -- shorten text to max size for horizontal style
                         else
-                            name = shortenText(ship.name, 25) -- shorten text to max size for horiz.wide style
+                            name = Co.shortenText(ship.name, 25) -- shorten text to max size for horiz.wide style
                         end
                         drawText(name, offshipX + 5, offsetY, gcolor, fontsize_ship, false, false, 1) 
 
@@ -2267,7 +2231,7 @@ function onPreRenderHud()
                             elseif not ship.hascaptain then
                                 ordertxt = "No Captain"
                             elseif not ship.elsewhere and ship.order then
-                                local oi, i = table.childByKeyVal(ordersInfo, "order", ship.order)
+                                local oi, i = Co.table_childByKeyVal(ordersInfo, "order", ship.order)
                                 if oi then
                                     ordertxt = oi.text
                                 end
@@ -2306,33 +2270,33 @@ function onPreRenderHud()
 end
 
 
-function syncShipInfos(statedata)
+function FleetControlUi.syncShipInfos(statedata)
 
     -- merge states and known infos like location
     local newstates = {}
     for gi, gships in pairs(shipgroups) do
         newstates[gi] = {}
-        for _, shipname in pairs(gships) do
+        for _, shipidx in pairs(gships) do
             local info 
-            local data = table.childByKeyVal(statedata, "name", shipname)
+            local data = Co.table_childByKeyVal(statedata, "index", shipidx)
+            local known = Co.table_childByKeyVal(knownships, "index", shipidx)
             if data then
                 info = data
-                local known = table.childByKeyVal(knownships, "name", shipname)
                 if known then
                     info.location = known.location
                 end
             else
-                -- ship elsewhere -> reuse known info and mark it
-                local known = table.childByKeyVal(knownships, "name", shipname)
+                -- ship elsewhere -> reuse known info and mark it             
                 if known then
                     --debugLog("syncShipInfos() -> ship '%s' not in player sector, restoring known info", shipname)
                     info = {
+                        index = shipidx,
                         name = known.name,
                         location = known.location,
                         elsewhere = true
                     }
                 else
-                    debugLog("syncShipInfos() -> no known info for '%s'!", shipname)
+                    Co.debugLog("syncShipInfos() -> no known info for '%s'!", shipname)
                 end
             end
             table.insert(newstates[gi], info)
@@ -2343,7 +2307,7 @@ function syncShipInfos(statedata)
 
     -- update infos in UI
     if uivisible then
-        refreshOrdersUI()
+        Me.refreshOrdersUI()
     end
 
 end
@@ -2351,38 +2315,30 @@ end
 
 ---- SERVER-SIDE ----
 
-function updateShipStates(groups, ships)
+function FleetControlUi.updateShipStates(updateindices, ships)
 
     if onClient() then
-        invokeServerFunction("updateShipStates", groups, ships)
+        invokeServerFunction("updateShipStates", updateindices, ships)
         return
     end
 
     local statedata = {}
-
-    -- create flat array of ship names to update
-    local updateships = {}
-    for _, grp in pairs(groups) do
-        for _, shp in pairs(grp) do
-            table.insert(updateships, shp)
-        end
-    end
-
     local pshipIndex = Player(callingPlayer).craftIndex
 
     -- compare existing ships in sector and get their states 
     for _, ship in pairs(ships) do 
-        if table.contains(updateships, ship.name) then
+        if Co.table_contains(updateindices, ship.index.string) then
             local entity = Entity(ship.index)
-            if entity and entity.isShip and entity.name == ship.name then
+            if entity and entity.isShip then
                 -- TODO: check also if ship is controlled by another player
-                local state, order = getShipAIOrderState(entity) 
+                local state, order = Co.getShipAIOrderState(entity) 
                 table.insert(statedata, {
                     name = entity.name,
-                    index = entity.index,
+                    index = entity.index.string,
                     state = state,
                     order = order,
-                    hascaptain = checkShipCaptain(entity),
+                    hascaptain = Co.checkShipCaptain(entity),
+                    -- TODO: also check if other player controls ship
                     isplayer = (entity.index == pshipIndex)
                 })
             end
@@ -2395,7 +2351,7 @@ function updateShipStates(groups, ships)
 end
 
 
-function invokeOrdersScript(shipindices, orderinfo, paramoverride)
+function FleetControlUi.invokeOrdersScript(shipindices, orderinfo, paramoverride)
 
     -- make this function run server-side only
     if onClient() then
@@ -2414,11 +2370,10 @@ function invokeOrdersScript(shipindices, orderinfo, paramoverride)
         end
 
         if ship and ship.isShip then
-            if not ship:hasScript(orderinfo.script) then
-                debugLog("invokeOrdersScript() --> ship: %s (%s) is missing script '%s'!", idx, orderinfo.script)
-                return
-            end
-            debugLog("invokeOrdersScript() --> ship: %s (%s) | order: %s | script: %s | func: %s | param: %s | paramoverride: %s", ship.name, ship.index, orderinfo.order, orderinfo.script, orderinfo.func, orderinfo.param, paramoverride)
+            Co.ensureEntityScript(ship, Co.fc_script_craftorders);
+            ship:invokeFunction(orderinfo.script, "setCurrentPlayerIndex", callingPlayer)
+
+            Co.debugLog("invokeOrdersScript() --> ship: %s (%s) | order: %s | script: %s | func: %s | param: %s | paramoverride: %s", ship.name, ship.index, orderinfo.order, orderinfo.script, orderinfo.func, orderinfo.param, paramoverride)
 
             if paramoverride then
                 ship:invokeFunction(orderinfo.script, orderinfo.func, paramoverride)
@@ -2428,13 +2383,13 @@ function invokeOrdersScript(shipindices, orderinfo, paramoverride)
                 elseif orderinfo.param == "selectedcraftindex" then
                     ship:invokeFunction(orderinfo.script, orderinfo.func, idx)
                 else
-                    debugLog("invokeOrdersScript() --> unknown order function parameter!", idx)
+                    Co.debugLog("invokeOrdersScript() --> unknown order function parameter!", idx)
                 end
             else
                 ship:invokeFunction(orderinfo.script, orderinfo.func) 
             end
         else
-            debugLog("invokeOrdersScript() --> no ship/entity with index %s found!", idx)
+            Co.debugLog("invokeOrdersScript() --> no ship/entity with index %s found!", idx)
         end
 
     end
@@ -2443,7 +2398,7 @@ end
 
 ---- UTILITY FUNCTIONS ----
 
-function orderGroupsIter()
+function FleetControlUi.orderGroupsIter()
     local i = 0
     local lb = ((currentPage * ordergroupslimit) - ordergroupslimit + 1)
     local ub = (currentPage * ordergroupslimit)

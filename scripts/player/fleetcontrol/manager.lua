@@ -19,6 +19,8 @@ require "fleetcontrol.common"
 -- namespace FleetControlManager
 FleetControlManager = {}
 
+local Me = FleetControlManager
+local Co = FleetControlCommon
 
 local lastCraft
 
@@ -27,13 +29,18 @@ function FleetControlManager.initialize()
 
     if onClient() then return end -- only init server-side
 
-    local sconfig = getConfig("server", sconfigdefaults)
-    enableDebugOutput(sconfig.debugoutput) 
+    local sconfig = Co.getConfig("server", sconfigdefaults)
+    Co.enableDebugOutput(sconfig.debugoutput) 
 
     -- deferred server<->client version check
     -- (calling invokeClient/invokeServer from initialize just keeps calling the function in current context!)
     deferredCallback(1, "requestClientVersion")
  
+end
+
+
+function FleetControlManager.onRemove()
+    Me.removeAllScripts()
 end
 
 
@@ -44,12 +51,12 @@ function FleetControlManager.requestClientVersion()
         return
     end
     
-    local cmodinfo = getModInfo()
+    local cmodinfo = Co.getModInfo()
 
-    scriptLog(nil, "client mod version requested by server -> %s", getVersionString(cmodinfo.version))
+    Co.scriptLog(nil, "client mod version requested by server -> %s", Co.getVersionString(cmodinfo.version))
 
     -- send result back to server
-    FleetControlManager.validateClientVersion(cmodinfo.version)
+    Me.validateClientVersion(cmodinfo.version)
 
 end
 
@@ -62,21 +69,42 @@ function FleetControlManager.validateClientVersion(cversion)
     end
 
     local player = Player(callingPlayer)
-    local smodinfo = getModInfo()
+    local smodinfo = Co.getModInfo()
 
     local cminversion = smodinfo.clientminversion
     if cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] then 
         -- client version is valid for server version
-        debugLog("successfully validated mod versions (server: %s | clientminversion: %s | client: %s)", getVersionString(smodinfo.version), getVersionString(cminversion), getVersionString(cversion))
+        Co.debugLog("successfully validated mod versions (server: %s | clientminversion: %s | client: %s)", 
+                Co.getVersionString(smodinfo.version), Co.getVersionString(cminversion), Co.getVersionString(cversion))
+
+        Me.upgradeConfigs()
         -- continue script loading etc.
-        deferredCallback(1, "initShipUIHandling", player)
-        --FleetControlManager.initShipUIHandling(player)
+        Me.initShipUIHandling(player)
     else
         -- invalid/outdated client version
-        scriptLog(player, "invalid client mod versions, aborted loading of scripts (server: %s | clientminversion: %s | client: %s)", getVersionString(smodinfo.version), getVersionString(cminversion), getVersionString(cversion))
-        player:sendChatMessage(smodinfo.name, 0, "Could not load UI due to client-server version mismatch!")
-        player:sendChatMessage(smodinfo.name, 0, string.format("Your version is %s, minimum required version is %s", getVersionString(cversion), getVersionString(cminversion)))
-        player:sendChatMessage(smodinfo.name, 0, "Please update the mod files on your client and restart the game!")
+        Co.scriptLog(player, "invalid client mod versions, aborted loading of scripts (server: %s | clientminversion: %s | client: %s)", 
+                Co.getVersionString(smodinfo.version), Co.getVersionString(cminversion), Co.getVersionString(cversion))
+        player:sendChatMessage(smodinfo.name, ChatMessageType.ServerInfo, "Could not load UI due to client-server version mismatch!")
+        player:sendChatMessage(smodinfo.name, ChatMessageType.ServerInfo, string.format("Your version is %s, minimum required version is %s", 
+                Co.getVersionString(cversion), Co.getVersionString(cminversion)))
+        player:sendChatMessage(smodinfo.name, ChatMessageType.ServerInfo, "Please update the mod files on your client and restart the game!")
+    end
+
+end
+
+
+function FleetControlManager.upgradeConfigs()
+
+    local pconfig = Co.getConfig("player", Co.getPlayerConfigDefaults())
+    if pconfig.knownships then
+        for _, ship in pairs(pconfig.knownships) do           
+            if not ship.index then
+                pconfig.knownships = {}
+                pconfig.shipgroups = {}
+                Co.saveConfig(pconfig)
+                break
+            end
+        end
     end
 
 end
@@ -91,19 +119,19 @@ function FleetControlManager.initShipUIHandling(player)
     Server():registerCallback("onPlayerLogOff", "onPlayerLogOff")
 
     -- add UI script
-    FleetControlManager.addShipUIScript(player.craftIndex) 
+    Me.addShipUIScript(player.craftIndex) 
 
 end
 
 
 function FleetControlManager.onPlayerLogOff(playerIndex)
 
-    debugLog("onPlayerLogOff() -> playerIndex: %s", playerIndex)
+    Co.debugLog("onPlayerLogOff() -> playerIndex: %s", playerIndex)
 
     local player = Player(playerIndex)
     if lastCraft then 
         -- ensure UI scripts are deattached
-        FleetControlManager.removeShipUIScript(lastCraft)	
+        Me.removeShipUIScript(lastCraft)	
     end
 
 end
@@ -111,24 +139,24 @@ end
 
 function FleetControlManager.onShipChanged(playerIndex, craftIndex)
 
-    debugLog("onShipChanged() -> playerIndex: %s | craftIndex: %s", playerIndex, craftIndex)
+    Co.debugLog("onShipChanged() -> playerIndex: %s | craftIndex: %s", playerIndex, craftIndex)
 
     local player = Player(playerIndex)
     local shipidx = player.craftIndex
 
     --add and remove UI script for ship entities
     if lastCraft then
-        FleetControlManager.removeShipUIScript(lastCraft)	
+        Me.removeShipUIScript(lastCraft)	
     end
-    FleetControlManager.addShipUIScript(craftIndex)	
+    Me.addShipUIScript(craftIndex)	
 
 end
 
 
 function FleetControlManager.onDestroyed(index, lastDamageInflictor) 
 
-    debugLog("onDestroyed()")
-    FleetControlManager.removePlayerShip(index)
+    Co.debugLog("onDestroyed()")
+    Me.removePlayerShip(index)
 
 end
 
@@ -136,7 +164,7 @@ end
 function FleetControlManager.onSectorEntered(playerIndex, x, y) 
 
     Sector():registerCallback("onDestroyed", "onDestroyed")
-    FleetControlManager.updateSectorPlayerShips()
+    Me.updateSectorPlayerShips()
 
 end
 
@@ -147,7 +175,7 @@ function FleetControlManager.addShipUIScript(shipidx)
     if shipidx and lastCraft ~= shipidx then
         local entity = Entity(shipidx)
         if entity and valid(entity) then
-            ensureEntityScript(entity, fc_script_controlui)
+            Co.ensureEntityScript(entity, Co.fc_script_controlui)
             lastCraft = entity.index
         end
     end
@@ -161,7 +189,7 @@ function FleetControlManager.removeShipUIScript(shipidx)
     if shipidx then
         local entity = Entity(shipidx)
         if entity and valid(entity) then
-            removeEntityScript(entity, fc_script_controlui)
+            Co.removeEntityScript(entity, Co.fc_script_controlui)
             if shipidx == lastCraft then
                 lastCraft = nil
             end
@@ -176,16 +204,22 @@ function FleetControlManager.removeAllScripts()
     local player = Player()
     local shipidx = player.craftIndex
 
-    --add and remove UI script for ship entities
-    FleetControlManager.removeShipUIScript(shipidx)
+    -- remove UI script for current ship
+    Me.removeShipUIScript(shipidx)
     if lastCraft and lastCraft ~= shipidx then
-        FleetControlManager.removeShipUIScript(lastCraft)	
+        Me.removeShipUIScript(lastCraft)	
     end
 
-    -- TODO: remove all scripts from every entity when non-UI entity scripts are added
+    -- remove all entity scripts for all known ships
+    for _, s in pairs(knownships) do
+        local entity = Entity(s.index)
+        if entity and valid(entity) then
+            Co.removeEntityScript(entity, Co.fc_script_craftorders)
+        end
+    end
 
     -- remove myself
-    FleetControlManager.terminate()
+    terminate()
 end
 
 
@@ -194,18 +228,18 @@ function FleetControlManager.removePlayerShip(index)
     local entity = Entity(index)
     if entity and valid(entity) then
         -- get config values to update
-        local pconfig = getConfig("player", getPlayerConfigDefaults())
+        local pconfig = Co.getConfig("player", Co.getPlayerConfigDefaults())
         local knownships = pconfig.knownships
         local shipgroups = pconfig.shipgroups
         
-        local ship, idx = table.childByKeyVal(knownships, "name", entity.name)
+        local ship, idx = Co.table_childByKeyVal(knownships, "index", entity.index.string)
         if ship then
             -- remove ship(s) from knownships
             table.remove(knownships, idx)
             -- remove ship from assigned group
             for g, grp in pairs(shipgroups) do 
-                for s, shp in pairs(grp) do
-                    if shp == entity.name then
+                for s, shpidx in pairs(grp) do
+                    if shpidx == entity.index.string then
                         table.remove(shipgroups[g], s)
                         break
                     end
@@ -219,7 +253,7 @@ function FleetControlManager.removePlayerShip(index)
             -- debugLog("onDestroyed() -> shipgroups:")
             -- debugLog(printTable(shipgroups))
 
-            scriptLog(Player(), "player ship '%s' was destroyed -> known and group ships were updated", entity.name)       
+            Co.scriptLog(Player(), "player ship '%s' was destroyed -> known and group ships were updated", entity.name)       
         end
     end
 
@@ -228,11 +262,12 @@ end
 
 function FleetControlManager.updateSectorPlayerShips()
 
-    local pconfig = getConfig("player", getPlayerConfigDefaults())
+    local pconfig = Co.getConfig("player", Co.getPlayerConfigDefaults())
     local knownships = pconfig.knownships
+    local shipgroups = pconfig.shipgroups
 
     -- get all exisiting ships of player in current sector
-    local sectorships = getPlayerCrafts()
+    local sectorships = Co.getPlayerCrafts()
 
     local cx, cy = Sector():getCoordinates()
     local coords = {x=cx, y=cy}
@@ -242,13 +277,13 @@ function FleetControlManager.updateSectorPlayerShips()
     local delidx = {}
     for i, s in pairs(knownships) do
         if s.location.x == coords.x and s.location.y == coords.y then
-            local ship = table.childByKeyVal(sectorships, "name", s.name)
+            local ship = Co.table_childByKeyVal(sectorships, "name", s.name)
             if not ship then
                 table.insert(delidx, i)    
                 -- remove ship from assigned group
                 for gi, grp in pairs(shipgroups) do 
-                    for si, shp in pairs(grp) do
-                        if shp == s.name then
+                    for si, shpidx in pairs(grp) do
+                        if shpidx == s.index then
                             table.remove(shipgroups[gi], si)
                             break
                         end
@@ -257,16 +292,18 @@ function FleetControlManager.updateSectorPlayerShips()
             end
         end      
     end
+    pconfig.shipgroups = shipgroups
+
     if #delidx > 0 then
         -- remove ship(s) from knownships
         for _, idx in pairs(delidx) do
             local ship = knownships[idx]
             table.remove(knownships, idx)        
-            scriptLog(Player(), "player ship '%s' was expected but not found in sector!", ship.name)
+            Co.scriptLog(Player(), "player ship '%s' was expected but not found in sector!", ship.name)
         end
         -- update player config
         pconfig.knownships = knownships
-        scriptLog(Player(), "player known and group ships were updated")
+        Co.scriptLog(Player(), "player known and group ships were updated")
     end
 
 end
@@ -275,11 +312,12 @@ end
 function FleetControlManager.updateServerConfig()
 
     local player = Player()
-    if player.craftIndex and player.craftIndex > 0 then
+    if player.craftIndex then
         local entity = Entity(player.craftIndex)
         if entity and valid(entity) then
             -- push server config values to client UI script
-            FleetControlManager.pushShipUIServerConfig(entity)
+            local sconfig = Co.getConfig("server", sconfigdefaults)
+            entity:invokeFunction(Co.fc_script_controlui, "syncServerConfig", sconfig)
         end
     end
 

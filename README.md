@@ -1,6 +1,6 @@
 # FleetControl
 
-![compatibility-beta](https://img.shields.io/badge/avorion--beta-v0.11.0.7857-blue.svg) 
+![compatibility-beta](https://img.shields.io/badge/avorion--beta-v0.18-blue.svg) 
 
 ### Description
 
