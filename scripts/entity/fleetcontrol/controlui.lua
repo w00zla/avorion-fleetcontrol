@@ -224,10 +224,16 @@ function FleetControlUi.initialize()
 end
 
 
-function FleetControlUi.syncServerConfig(config)
+function FleetControlUi.syncServerConfig(config, playeridx)
 
     if onServer() then
-        invokeClientFunction(Player(callingPlayer), "syncServerConfig", config)
+		local player 
+		if playeridx then
+			player = Player(playeridx)
+		else
+			player = Player(callingPlayer)
+		end
+        invokeClientFunction(player, "syncServerConfig", config)
         return
     end 
 
