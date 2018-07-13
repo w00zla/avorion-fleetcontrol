@@ -72,7 +72,14 @@ function FleetControlManager.validateClientVersion(cversion)
     local smodinfo = Co.getModInfo()
 
     local cminversion = smodinfo.clientminversion
-    if cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] then 
+    local versionvalid = false
+    if #cversion = 3 and cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] and cversion[3] >= cminversion[3] then
+        versionvalid = true
+    else if cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] then
+        versionvalid = true
+    end
+    
+    if versionvalid then 
         -- client version is valid for server version
         Co.debugLog("successfully validated mod versions (server: %s | clientminversion: %s | client: %s)", 
                 Co.getVersionString(smodinfo.version), Co.getVersionString(cminversion), Co.getVersionString(cversion))
