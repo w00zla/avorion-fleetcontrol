@@ -42,11 +42,13 @@ Command to change advanced server-configurations used by Fleet Control UI.
 *Usage:*   
 `/fleetcontrolconfig updatedelay <NUMBER>`   
 `/fleetcontrolconfig enablehud <BOOLEAN>`   
+`/fleetcontrolconfig clear <TARGET>`
 
 *Parameters:*  
 `<NUMBER>` = any positive number or `0`  
 `<BOOLEAN>` = `true` or `false`
-
+`<TARGET>` = `player` or `server`
+   
 
 ##  INSTALLATION
 Download the ZIP file of the **[latest release](https://github.com/w00zla/avorion-fleetcontrol/releases)** and extract it to `<Avorion>\data\` directory.  
