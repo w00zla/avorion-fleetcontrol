@@ -25,7 +25,7 @@ local modinfo
 function FleetControlConfigCommand.execute(sender, commandName, ...)
 	local args = {...}	
 	local player = Player(sender)	
-    modinfo = getModInfo()
+    	modinfo = Co.getModInfo()
 	
 	if #args > 0 and args[1] ~= "" then	
 		-- parse command args
@@ -33,7 +33,7 @@ function FleetControlConfigCommand.execute(sender, commandName, ...)
 		local configval = table.concat(args, " ", 2)	
 		
 		-- validate and save config option
-		updateConfig(player, configkey, configval)
+		Me.updateConfig(player, configkey, configval)
 
 	else
 		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Missing parameters! Use '/help fleetcontrolconfig' for information.")	
@@ -47,24 +47,24 @@ function FleetControlConfigCommand.updateConfig(player, configkey, configval)
 
 	local valid = false
 	local paramtype = ""
-    local sconfig = getConfig("server", sconfigdefaults)
-	enableDebugOutput(sconfig.debugoutput) 
+    	local sconfig = Co.getConfig("server", sconfigdefaults)
+	Co.enableDebugOutput(sconfig.debugoutput) 
 	
 	if configkey == "updatedelay" then
 		paramtype = "pnum"
-		configval = validateParameter(configval, paramtype)
+		configval = Co.validateParameter(configval, paramtype)
 		if configval then valid = true end
 	elseif configkey == "enablehud" then
 		paramtype = "bool"
-		configval = validateParameter(configval, paramtype)
+		configval = Co.validateParameter(configval, paramtype)
 		if configval ~= nil then valid = true end
 	elseif configkey == "debugoutput" then
 		paramtype = "bool"
-		configval = validateParameter(configval, paramtype)
+		configval = Co.validateParameter(configval, paramtype)
 		if configval ~= nil then valid = true end
 	else
 		-- unknown config
-		scriptLog(player, "unknown server configuration (key: %s | val: %s)", configkey, configval)
+		Co.scriptLog(player, "unknown server configuration (key: %s | val: %s)", configkey, configval)
 		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Error: Unknown server configuration '%s'!", configkey)
 		return
     end
@@ -72,7 +72,7 @@ function FleetControlConfigCommand.updateConfig(player, configkey, configval)
 	if valid then
 		-- valid update -> save config
 		sconfig[configkey] = configval		
-		scriptLog(player, "server configuration updated -> key: %s | val: %s", configkey, configval)
+		Co.scriptLog(player, "server configuration updated -> key: %s | val: %s", configkey, configval)
 		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Server configuration updated successfully")
 		-- trigger server config update for all relevant players
 		local playerIndices = {}
@@ -88,17 +88,17 @@ function FleetControlConfigCommand.updateConfig(player, configkey, configval)
 			end
 		end
 		if sconfig.debugoutput then
-			debugLog("update config -> found online players with manager script attached:")
+			Co.debugLog("update config -> found online players with manager script attached:")
 			printTable(playerIndices)
 		end
 		for _, idx in pairs(playerIndices) do
-			debugLog("update config -> triggering server config update in scripts for player %i", idx)
+			Co.debugLog("update config -> triggering server config update in scripts for player %i", idx)
 			Player(idx):invokeFunction(Co.fc_script_manager, "updateServerConfig") 
 		end
 	else
 		-- invalid value	
 		local paramtypelabel = getParamTypeLabel(paramtype)
-		scriptLog(player, "invalid server configuration value (key: %s | val: %s | paramtype: %s)", configkey, configval, paramtype)
+		Co.scriptLog(player, "invalid server configuration value (key: %s | val: %s | paramtype: %s)", configkey, configval, paramtype)
 		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Error: %s parameter required for config '%s'!", paramtypelabel, configkey)
 	end
 
