@@ -25,8 +25,8 @@ local Me = FleetControlCommon
 local modInfo = {  
     name = "FleetControl",
     author = "w00zla",
-    version = { 0, 5 },
-    clientminversion = { 0, 5 }
+    version = { 0, 5, 1 },
+    clientminversion = { 0, 5, 1 }
 }
 
 -- config
@@ -179,7 +179,11 @@ end
 
 function FleetControlCommon.getVersionString(version)
     if version then
-        return string.format("v%i.%i", version[1],  version[2])
+	if #version = 3 then
+		return string.format("v%i.%i.%i", version[1],  version[2], version[3])
+	else
+        	return string.format("v%i.%i", version[1],  version[2])
+	end
     end
 end
 
