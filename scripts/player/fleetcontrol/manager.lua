@@ -317,7 +317,7 @@ function FleetControlManager.updateServerConfig()
         if entity and valid(entity) then
             -- push server config values to client UI script
             local sconfig = Co.getConfig("server", sconfigdefaults)
-            entity:invokeFunction(Co.fc_script_controlui, "syncServerConfig", sconfig)
+            entity:invokeFunction(Co.fc_script_controlui, "syncServerConfig", sconfig, player.index)
         end
     end
 
