@@ -32,9 +32,17 @@ function FleetControlConfigCommand.execute(sender, commandName, ...)
 		local configkey = string.lower(args[1])
 		local configval = table.concat(args, " ", 2)	
 		
-		-- validate and save config option
-		Me.updateConfig(player, configkey, configval)
-
+		if configkey = "clear" then
+			if configval = "player" then
+				Co.clearConfigStorage(Co.getConfig("player", Co.getPlayerConfigDefaults()))
+			else if configval = "server" then
+				Co.clearConfigStorage(Co.getConfig("server", Co.getServerConfigDefaults()))
+			end			
+		else
+			-- validate and save config option
+			Me.updateConfig(player, configkey, configval)
+		end
+		
 	else
 		player:sendChatMessage(modinfo.name, ChatMessageType.ServerInfo, "Missing parameters! Use '/help fleetcontrolconfig' for information.")	
 	end
@@ -47,7 +55,7 @@ function FleetControlConfigCommand.updateConfig(player, configkey, configval)
 
 	local valid = false
 	local paramtype = ""
-    	local sconfig = Co.getConfig("server", sconfigdefaults)
+    local sconfig = Co.getConfig("server", sconfigdefaults)
 	Co.enableDebugOutput(sconfig.debugoutput) 
 	
 	if configkey == "updatedelay" then
@@ -117,8 +125,10 @@ Configuration helper for the FleetControl mod.
 Usage:
 /fleetcontrolconfig updatedelay <NUMBER>
 /fleetcontrolconfig enablehud <BOOLEAN>
+/fleetcontrolconfig clear <TARGET>
 Parameter:
 <NUMBER> = any positive number or 0
 <BOOLEAN> = 'true' or 'false'
+<TARGET> = 'player' or 'server'
 ]]
 end
