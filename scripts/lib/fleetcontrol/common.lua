@@ -147,11 +147,20 @@ function FleetControlCommon.copyConfig(source)
     return copy
 end
 
+
 function FleetControlCommon.saveConfig(config)
     if config then
         --Me.debugLog("persisting %s configuration...", config._scope)
         CachedConfig_CommitSave(config)
     end
+end
+
+
+function FleetControlCommon.clearConfigStorage(config)
+	if config then
+		--Me.debugLog("clearing %s configuration...", config._scope)
+        CachedConfig_ClearSavedValues(config)
+	end
 end
 
 
@@ -179,11 +188,11 @@ end
 
 function FleetControlCommon.getVersionString(version)
     if version then
-	if #version = 3 then
-		return string.format("v%i.%i.%i", version[1],  version[2], version[3])
-	else
-        	return string.format("v%i.%i", version[1],  version[2])
-	end
+		if #version = 3 then
+			return string.format("v%i.%i.%i", version[1],  version[2], version[3])
+		else
+				return string.format("v%i.%i", version[1],  version[2])
+		end
     end
 end
 
