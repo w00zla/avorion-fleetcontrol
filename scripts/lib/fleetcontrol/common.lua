@@ -25,8 +25,8 @@ local Me = FleetControlCommon
 local modInfo = {  
     name = "FleetControl",
     author = "w00zla",
-    version = { 0, 5, 1 },
-    clientminversion = { 0, 5, 1 }
+    version = { 0, 5, 2 },
+    clientminversion = { 0, 5, 2 }
 }
 
 -- config
@@ -454,36 +454,36 @@ function FleetControlCommon.getShipAIOrderState(entity, playershipidx)
         aistate = Me.getAIStateString(ai.state)
     end
 
-    -- if entity:hasScript(Me.fc_script_craftorders) then
-    --     local success, target = entity:invokeFunction(Me.fc_script_craftorders, "getCurrentTagetData")
-    --     if not success then
-    --         Me.scriptLog("Could not invoke script '%s' sucessfully -> unable to retrieve ship order", Me.fc_script_craftorders)
-    --     end
-    --     if not target.action then
-    --         order = aistate 
-    --     elseif target.action == 1 then -- Escort
-    --         if target.index == playershipidx then
-    --             order = "Escort"
-    --         else
-    --             order = "EscortShip"
-    --         end
-    --     elseif target.action == 2 or target.action == 7 then -- Attack or Aggressive
-    --         order = "Attack"
-    --     -- elseif target.action == 3 then -- FlyThroughWormhole
-    --     --     order = "FlyThroughWormhole"
-    --     -- elseif target.action == 4 then -- FlyToPosition
-    --     --     order = "FlyToPosition"
-    --     elseif target.action == 5 then -- Guard
-    --         order = "Guard"
-    --     elseif target.action == 6 then -- Patrol
-    --         order = "Patrol"
-    --     elseif target.action == 8 then -- Mine
-    --         order = "Mine"
-    --     elseif target.action == 9 then -- Salvage
-    --         order = "Salvage"
-    --     end
-    -- else
+    if entity:hasScript(Me.fc_script_craftorders) then
+        local rescode, target = entity:invokeFunction(Me.fc_script_craftorders, "getCurrentTagetData")
 
+        if rescode > 0 then
+            Me.scriptLog("Could not invoke script '%s' sucessfully -> unable to retrieve ship order (rescode:%s)", Me.fc_script_craftorders, rescode)
+        end
+        if not target.action then
+            order = aistate 
+        elseif target.action == 1 then -- Escort
+            if target.index == playershipidx then
+                order = "Escort"
+            else
+                order = "EscortShip"
+            end
+        elseif target.action == 2 or target.action == 7 then -- Attack or Aggressive
+            order = "Attack"
+        -- elseif target.action == 3 then -- FlyThroughWormhole
+        --     order = "FlyThroughWormhole"
+        -- elseif target.action == 4 then -- FlyToPosition
+        --     order = "FlyToPosition"
+        elseif target.action == 5 then -- Guard
+            order = "Guard"
+        elseif target.action == 6 then -- Patrol
+            order = "Patrol"
+        elseif target.action == 8 then -- Mine
+            order = "Mine"
+        elseif target.action == 9 then -- Salvage
+            order = "Salvage"
+        end
+    else
         -- get current ship order by looking at the AI state and attached scripts like "ai/mine.lua"
 
         if ai.state == AIState.Idle or 
@@ -506,7 +506,7 @@ function FleetControlCommon.getShipAIOrderState(entity, playershipidx)
                 order = "Salvage"
             end
         end
-    -- end
+    end
 
     return aistate, order
 

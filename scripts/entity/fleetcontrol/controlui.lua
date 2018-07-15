@@ -190,21 +190,15 @@ local eventsactive = false
 
 function FleetControlUi.initialize()
 
-    if onServer() then 
-        -- SERVER
+    if onServer() then    
         sconfig = Co.getConfig("server", Co.getServerConfigDefaults())
-        Co.enableDebugOutput(sconfig.debugoutput)         
-        deferredCallback(1, "syncServerConfig", sconfig)
+        Co.enableDebugOutput(sconfig.debugoutput)   
         return 
     end
 
     -- CLIENT
 
-    -- initial debug options
-    if not sconfig then
-        sconfig = Co.getServerConfigDefaults()
-        Co.enableDebugOutput(sconfig.debugoutput)
-    end
+    sconfig = Co.getServerConfigDefaults()
 
     ordersInfo = Co.getOrdersInfo()
     aiStates = Co.getAiStates()
@@ -221,18 +215,21 @@ function FleetControlUi.initialize()
         Me.subscribeHudCallbacks()
         doupdatestates = true
     end
+
+    Co.scriptLog(nil, "client UI initialized successfully")
 end
 
 
 function FleetControlUi.syncServerConfig(config, playeridx)
 
     if onServer() then
+        sconfig = config
 		local player 
 		if playeridx then
 			player = Player(playeridx)
 		else
 			player = Player(callingPlayer)
-		end
+        end
         invokeClientFunction(player, "syncServerConfig", config)
         return
     end 
@@ -243,7 +240,7 @@ function FleetControlUi.syncServerConfig(config, playeridx)
 
     if sconfig.debugoutput then 
         Co.debugLog("synced mod server configuration to client:")
-        printTable(sconfig) 
+        printTable(sconfig._cache) 
     end
 
 end
@@ -406,8 +403,6 @@ function FleetControlUi.initUI()
     tabs.window:selectTab(tabs.orders)
 
     eventsactive = true
-
-    Co.scriptLog(nil, "client UI initialized successfully")
     
 end
 

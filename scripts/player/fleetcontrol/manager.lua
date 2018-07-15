@@ -184,6 +184,7 @@ function FleetControlManager.addShipUIScript(shipidx)
         if entity and valid(entity) then
             Co.ensureEntityScript(entity, Co.fc_script_controlui)
             lastCraft = entity.index
+            deferredCallback(1, "updateServerConfig")
         end
     end
 

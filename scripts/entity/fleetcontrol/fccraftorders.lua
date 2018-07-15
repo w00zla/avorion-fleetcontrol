@@ -1,10 +1,12 @@
 
 package.path = package.path .. ";data/scripts/lib/?.lua"
+package.path = package.path .. ";data/scripts/entity/?.lua"
 
 require ("stringutility")
 require ("faction")
 
 require "fleetcontrol.common"
+require "craftorders"
 
 local AIAction =
 {
@@ -24,59 +26,80 @@ local AIAction =
 FleetControlCraftOrders = {}
 
 FleetControlCraftOrders.currentPlayerIndex = 0
-FleetControlCraftOrders.targetAction = nil
-FleetControlCraftOrders.targetIndex = nil
-FleetControlCraftOrders.targetPosition = nil
+-- FleetControlCraftOrders.targetAction = nil
+-- FleetControlCraftOrders.targetIndex = nil
+-- FleetControlCraftOrders.targetPosition = nil
 
 local Co = FleetControlCommon
+
+function FleetControlCraftOrders.initialize()
+
+    if onServer() then    
+        local sconfig = Co.getConfig("server", Co.getServerConfigDefaults())
+        Co.enableDebugOutput(sconfig.debugoutput)   
+        return 
+    end
+
+end
+
 
 function FleetControlCraftOrders.setCurrentPlayerIndex(index)
     FleetControlCraftOrders.currentPlayerIndex = index
 end
 
+
 function FleetControlCraftOrders.getCurrentTagetData()
     return { 
-        action = FleetControlCraftOrders.targetAction, 
-        index = FleetControlCraftOrders.targetIndex, 
-        position = FleetControlCraftOrders.targetPosition 
+        action = CraftOrders.targetAction, 
+        index = CraftOrders.targetIndex, 
+        position = CraftOrders.targetPosition 
     }
 end
 
 
 function FleetControlCraftOrders.setAIAction(action, index, position)
     if onServer() then
-        FleetControlCraftOrders.targetAction = action
-        FleetControlCraftOrders.targetIndex = index
-        FleetControlCraftOrders.targetPosition = position
+        -- FleetControlCraftOrders.targetAction = action
+        -- FleetControlCraftOrders.targetIndex = index
+        -- FleetControlCraftOrders.targetPosition = position
         invokeClientFunction(Player(FleetControlCraftOrders.currentPlayerIndex), "setAIAction", action, index, position)
     end
 
-    FleetControlCraftOrders.updateCurrentOrderIcon(action)
+    -- FleetControlCraftOrders.targetAction = action
+    -- FleetControlCraftOrders.targetIndex = index
+    -- FleetControlCraftOrders.targetPosition = position
+
+    CraftOrders.targetAction = action
+    CraftOrders.targetIndex = index
+    CraftOrders.targetPosition = position
+
+    --FleetControlCraftOrders.updateCurrentOrderIcon(action)
+    CraftOrders.updateCurrentOrderIcon()
 end
 
-function FleetControlCraftOrders.updateCurrentOrderIcon(action)
-    if action == AIAction.Escort then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/escort.png")
-    elseif action == AIAction.Attack then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/attack.png")
-    elseif action == AIAction.FlyThroughWormhole then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/gate.png")
-    elseif action == AIAction.FlyToPosition then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/flytoposition.png")
-    elseif action == AIAction.Guard then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/guard.png")
-    elseif action == AIAction.Patrol then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/escort.png")
-    elseif action == AIAction.Aggressive then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/attack.png")
-    elseif action == AIAction.Mine then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/mine.png")
-    elseif action == AIAction.Salvage then
-        Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/scrapyard_thin.png")
-    else
-        Entity():setValue("currentOrderIcon", "")
-    end
-end
+-- function FleetControlCraftOrders.updateCurrentOrderIcon(action)
+--     if action == AIAction.Escort then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/escort.png")
+--     elseif action == AIAction.Attack then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/attack.png")
+--     elseif action == AIAction.FlyThroughWormhole then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/gate.png")
+--     elseif action == AIAction.FlyToPosition then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/flytoposition.png")
+--     elseif action == AIAction.Guard then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/guard.png")
+--     elseif action == AIAction.Patrol then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/escort.png")
+--     elseif action == AIAction.Aggressive then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/attack.png")
+--     elseif action == AIAction.Mine then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/mine.png")
+--     elseif action == AIAction.Salvage then
+--         Entity():setValue("currentOrderIcon", "data/textures/icons/pixel/scrapyard_thin.png")
+--     else
+--         Entity():setValue("currentOrderIcon", "")
+--     end
+-- end
 
 function FleetControlCraftOrders.interactionPossible(playerIndex, option)
     return false
