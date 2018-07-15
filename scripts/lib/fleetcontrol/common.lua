@@ -113,7 +113,7 @@ local ordersInfo = {
     { order="EscortShip", text="Escort Ship"%_t, script=Me.fc_script_controlui, func="onEscortShipButtonPressed", param="selectedcraftindex", invokecurrent=true, nongrouporder=true },
     { order="Attack", text="Attack Enemies"%_t, script=Me.fc_script_craftorders, func="onAttackEnemiesButtonPressed" },
     { order="Mine", text="Mine"%_t, script=Me.fc_script_craftorders, func="onMineButtonPressed" },
-    { order="Salvage", text="Salvage"%_t, script=Me.fc_script_craftorders, func="onSalvageButtonPressed" },
+    { order="", text="Salvage"%_t, script=Me.fc_script_craftorders, func="onSalvageButtonPressed" },
 }
 
 local aiStates = {
@@ -188,7 +188,7 @@ end
 
 function FleetControlCommon.getVersionString(version)
     if version then
-		if #version = 3 then
+		if #version == 3 then
 			return string.format("v%i.%i.%i", version[1],  version[2], version[3])
 		else
 				return string.format("v%i.%i", version[1],  version[2])
@@ -369,6 +369,21 @@ function FleetControlCommon.checkShipCaptain(entity)
 end
 
 
+function FleetControlCommon.checkShipAllianceFlyCraftPrivileges(entity, playeridx)
+
+    if entity.allianceOwned then
+        local ally = Alliance(entity.factionIndex)
+        local auth = ally:hasPrivilege(playeridx, AlliancePrivilege.FlyCrafts)
+        if not auth then          
+            debugLog("player #%s has no 'FlyCrafts' privilege for alliance '%s'", playeridx, ally.name)
+            return false
+        end  
+    end
+
+    return true
+end
+
+
 function FleetControlCommon.getPlayerCrafts()
 
     local ships = {}
@@ -386,7 +401,7 @@ function FleetControlCommon.getPlayerCrafts()
     if player.alliance then
         local allyentities = {Sector():getEntitiesByFaction(player.allianceIndex)}
         for _, e in pairs(allyentities) do
-            if e.isShip and checkEntityInteractionPermissions(e, AlliancePrivilege.FlyCrafts) then
+            if e.isShip and Co.checkShipAllianceFlyCraftPrivileges(e, player.index) then
                 table.insert(ships, { name=e.name, index=e.index })
             end
         end
@@ -430,15 +445,47 @@ function FleetControlCommon.getAIStateString(state)
 end
 
 
-function FleetControlCommon.getShipAIOrderState(entity)
+function FleetControlCommon.getShipAIOrderState(entity, playershipidx)
 
     local aistate, order
 
     local ai = ShipAI(entity.index)
     if ai then
         aistate = Me.getAIStateString(ai.state)
-        
+    end
+
+    -- if entity:hasScript(Me.fc_script_craftorders) then
+    --     local success, target = entity:invokeFunction(Me.fc_script_craftorders, "getCurrentTagetData")
+    --     if not success then
+    --         Me.scriptLog("Could not invoke script '%s' sucessfully -> unable to retrieve ship order", Me.fc_script_craftorders)
+    --     end
+    --     if not target.action then
+    --         order = aistate 
+    --     elseif target.action == 1 then -- Escort
+    --         if target.index == playershipidx then
+    --             order = "Escort"
+    --         else
+    --             order = "EscortShip"
+    --         end
+    --     elseif target.action == 2 or target.action == 7 then -- Attack or Aggressive
+    --         order = "Attack"
+    --     -- elseif target.action == 3 then -- FlyThroughWormhole
+    --     --     order = "FlyThroughWormhole"
+    --     -- elseif target.action == 4 then -- FlyToPosition
+    --     --     order = "FlyToPosition"
+    --     elseif target.action == 5 then -- Guard
+    --         order = "Guard"
+    --     elseif target.action == 6 then -- Patrol
+    --         order = "Patrol"
+    --     elseif target.action == 8 then -- Mine
+    --         order = "Mine"
+    --     elseif target.action == 9 then -- Salvage
+    --         order = "Salvage"
+    --     end
+    -- else
+
         -- get current ship order by looking at the AI state and attached scripts like "ai/mine.lua"
+
         if ai.state == AIState.Idle or 
            ai.state == AIState.Passive or 
            ai.state == AIState.Guard then
@@ -457,15 +504,9 @@ function FleetControlCommon.getShipAIOrderState(entity)
                 order = "Mine"
             elseif entity:hasScript("ai/salvage.lua") then
                 order = "Salvage"
-            elseif entity:hasScript("ai/haulgoods.lua") then
-                order = "Haul Goods"
-			elseif entity:hasScript("ai/clean.lua") then
-                order = "Remove asteroids"
-			elseif entity:hasScript("ai/cleanBreeders.lua") then
-                order = "Remove breeders"
             end
         end
-    end
+    -- end
 
     return aistate, order
 

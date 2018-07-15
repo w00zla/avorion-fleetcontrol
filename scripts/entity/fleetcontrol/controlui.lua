@@ -2337,7 +2337,7 @@ function FleetControlUi.updateShipStates(updateindices, ships)
             local entity = Entity(ship.index)
             if entity and entity.isShip then
                 -- TODO: check also if ship is controlled by another player
-                local state, order = Co.getShipAIOrderState(entity) 
+                local state, order = Co.getShipAIOrderState(entity, pshipIndex) 
                 table.insert(statedata, {
                     name = entity.name,
                     index = entity.index.string,

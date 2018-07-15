@@ -3,6 +3,9 @@ package.path = package.path .. ";data/scripts/lib/?.lua"
 
 require ("stringutility")
 require ("faction")
+
+require "fleetcontrol.common"
+
 local AIAction =
 {
     Escort = 1,
@@ -21,15 +24,31 @@ local AIAction =
 FleetControlCraftOrders = {}
 
 FleetControlCraftOrders.currentPlayerIndex = 0
+FleetControlCraftOrders.targetAction = nil
+FleetControlCraftOrders.targetIndex = nil
+FleetControlCraftOrders.targetPosition = nil
+
+local Co = FleetControlCommon
 
 function FleetControlCraftOrders.setCurrentPlayerIndex(index)
     FleetControlCraftOrders.currentPlayerIndex = index
 end
 
+function FleetControlCraftOrders.getCurrentTagetData()
+    return { 
+        action = FleetControlCraftOrders.targetAction, 
+        index = FleetControlCraftOrders.targetIndex, 
+        position = FleetControlCraftOrders.targetPosition 
+    }
+end
 
-function FleetControlCraftOrders.setAIActionForUI(action, index, position)
+
+function FleetControlCraftOrders.setAIAction(action, index, position)
     if onServer() then
-        invokeClientFunction(Player(FleetControlCraftOrders.currentPlayerIndex), "setAIActionForUI", action, index, position)
+        FleetControlCraftOrders.targetAction = action
+        FleetControlCraftOrders.targetIndex = index
+        FleetControlCraftOrders.targetPosition = position
+        invokeClientFunction(Player(FleetControlCraftOrders.currentPlayerIndex), "setAIAction", action, index, position)
     end
 
     FleetControlCraftOrders.updateCurrentOrderIcon(action)
@@ -67,21 +86,16 @@ end
 local function checkShipCommandable()
 
     local entity = Entity()
-    if entity.allianceOwned then
-        local ally = Alliance(entity.factionIndex)
-        local auth = ally:hasPrivilege(FleetControlCraftOrders.currentPlayerIndex, AlliancePrivilege.FlyCrafts)
-        if not auth then          
-            debugLog("player #%s has no 'FlyCrafts' privilege for alliance '%s'", FleetControlCraftOrders.currentPlayerIndex, ally.name)
-            return false
-        end  
+    if not Co.checkShipAllianceFlyCraftPrivileges(entity, FleetControlCraftOrders.currentPlayerIndex) then 
+        return false 
     end
 
     local captains = entity:getCrewMembers(CrewProfessionType.Captain)
-    if captains and captains > 0 then
-        return true
+    if not captains or captains < 1 then
+        return false
     end
 
-    return false
+    return true
 end
 
 local function removeSpecialOrders()
@@ -101,7 +115,7 @@ function FleetControlCraftOrders.onIdleButtonPressed()
 
         local ai = ShipAI()
         ai:setIdle()
-        FleetControlCraftOrders.setAIActionForUI()
+        FleetControlCraftOrders.setAIAction()
     end
 end
 
@@ -110,7 +124,7 @@ function FleetControlCraftOrders.stopFlying()
         removeSpecialOrders()
 
         ShipAI():setPassive()
-        FleetControlCraftOrders.setAIActionForUI()
+        FleetControlCraftOrders.setAIAction()
     end
 end
 
@@ -120,7 +134,7 @@ function FleetControlCraftOrders.onGuardButtonPressed()
 
         local pos = Entity().translationf
         ShipAI():setGuard(pos)
-        FleetControlCraftOrders.setAIActionForUI(AIAction.Guard, nil, pos)
+        FleetControlCraftOrders.setAIAction(AIAction.Guard, nil, pos)
     end
 end
 
@@ -129,7 +143,7 @@ function FleetControlCraftOrders.escortEntity(index)
         removeSpecialOrders()
 
         ShipAI():setEscort(Entity(index))
-        FleetControlCraftOrders.setAIActionForUI(AIAction.Escort, index)
+        FleetControlCraftOrders.setAIAction(AIAction.Escort, index)
     end
 end
 
@@ -139,7 +153,7 @@ function FleetControlCraftOrders.attackEntity(index)
 
         local ai = ShipAI()
         ai:setAttack(Entity(index))
-        FleetControlCraftOrders.setAIActionForUI(AIAction.Attack, index)
+        FleetControlCraftOrders.setAIAction(AIAction.Attack, index)
     end
 end
 
@@ -149,7 +163,7 @@ function FleetControlCraftOrders.flyToPosition(pos)
 
         local ai = ShipAI()
         ai:setFly(pos, 0)
-        FleetControlCraftOrders.setAIActionForUI(AIAction.FlyToPosition, nil, pos)
+        FleetControlCraftOrders.setAIAction(AIAction.FlyToPosition, nil, pos)
     end
 end
 
@@ -183,7 +197,7 @@ function FleetControlCraftOrders.flyThroughWormhole(index)
             ShipAI():setFly(target.translationf, 0)
         end
 
-        FleetControlCraftOrders.setAIActionForUI(AIAction.FlyThroughWormhole, index)
+        FleetControlCraftOrders.setAIAction(AIAction.FlyThroughWormhole, index)
     end
 end
 
@@ -192,7 +206,7 @@ function FleetControlCraftOrders.onAttackEnemiesButtonPressed()
         removeSpecialOrders()
 
         ShipAI():setAggressive()
-        FleetControlCraftOrders.setAIActionForUI(AIAction.Aggressive)
+        FleetControlCraftOrders.setAIAction(AIAction.Aggressive)
     end
 end
 
@@ -201,7 +215,7 @@ function FleetControlCraftOrders.onPatrolButtonPressed()
         removeSpecialOrders()
 
         Entity():addScript("ai/patrol.lua")
-        FleetControlCraftOrders.setAIActionForUI(AIAction.Patrol)
+        FleetControlCraftOrders.setAIAction(AIAction.Patrol)
     end
 end
 
@@ -210,7 +224,7 @@ function FleetControlCraftOrders.onMineButtonPressed()
         removeSpecialOrders()
 
         Entity():addScript("ai/mine.lua")
-        FleetControlCraftOrders.setAIActionForUI(AIAction.Mine)
+        FleetControlCraftOrders.setAIAction(AIAction.Mine)
     end
 end
 
@@ -219,7 +233,7 @@ function FleetControlCraftOrders.onSalvageButtonPressed()
         removeSpecialOrders()
 
         Entity():addScript("ai/salvage.lua")
-        FleetControlCraftOrders.setAIActionForUI(AIAction.Salvage)
+        FleetControlCraftOrders.setAIAction(AIAction.Salvage)
     end
 end
 

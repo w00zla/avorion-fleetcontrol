@@ -29,7 +29,7 @@ function FleetControlManager.initialize()
 
     if onClient() then return end -- only init server-side
 
-    local sconfig = Co.getConfig("server", sconfigdefaults)
+    local sconfig = Co.getConfig("server", Co.getServerConfigDefaults())
     Co.enableDebugOutput(sconfig.debugoutput) 
 
     -- deferred server<->client version check
@@ -73,9 +73,9 @@ function FleetControlManager.validateClientVersion(cversion)
 
     local cminversion = smodinfo.clientminversion
     local versionvalid = false
-    if #cversion = 3 and cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] and cversion[3] >= cminversion[3] then
+    if #cversion == 3 and cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] and cversion[3] >= cminversion[3] then
         versionvalid = true
-    else if cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] then
+    elseif cversion[1] >= cminversion[1] and cversion[2] >= cminversion[2] then
         versionvalid = true
     end
     
@@ -323,7 +323,7 @@ function FleetControlManager.updateServerConfig()
         local entity = Entity(player.craftIndex)
         if entity and valid(entity) then
             -- push server config values to client UI script
-            local sconfig = Co.getConfig("server", sconfigdefaults)
+            local sconfig = Co.getConfig("server", Co.getServerConfigDefaults())            
             entity:invokeFunction(Co.fc_script_controlui, "syncServerConfig", sconfig, player.index)
         end
     end
